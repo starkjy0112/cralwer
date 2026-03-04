@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>통합 검색 - 입찰공고 크롤러</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #4361ee;
+            --secondary-color: #3f37c9;
+            --success-color: #06d6a0;
+            --warning-color: #ffd166;
+            --danger-color: #ef476f;
+            --dark-color: #1a1a2e;
+            --light-bg: #f8f9fa;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+            background-color: var(--light-bg);
+            min-height: 100vh;
+        }
+
+        /* 헤더 */
+        .top-header {
+            background: linear-gradient(135deg, var(--dark-color) 0%, #16213e 100%);
+            color: white;
+            padding: 30px 0;
+            text-align: center;
+        }
+
+        .top-header h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
+        .top-header p {
+            opacity: 0.7;
+            font-size: 0.95rem;
+        }
+
+        /* 검색 영역 */
+        .search-section {
+            background: white;
+            padding: 30px;
+            margin: -30px auto 30px;
+            max-width: 800px;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            position: relative;
+            z-index: 10;
+        }
+
+        .search-box {
+            display: flex;
+            gap: 15px;
+        }
+
+        .search-input {
+            flex: 1;
+            padding: 15px 20px;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            font-size: 1.1rem;
+            transition: all 0.2s;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 4px rgba(67, 97, 238, 0.1);
+        }
+
+        .btn-search {
+            padding: 15px 40px;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn-search:hover {
+            background: var(--secondary-color);
+            transform: translateY(-2px);
+        }
+
+        .btn-search:disabled {
+            background: #adb5bd;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .search-options {
+            margin-top: 15px;
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .search-options label {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+
+        /* 컨테이너 */
+        .container-main {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 20px 40px;
+        }
+
+        /* 요약 카드 */
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .summary-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 2px solid transparent;
+        }
+
+        .summary-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+
+        .summary-card.active {
+            border-color: var(--primary-color);
+            background: rgba(67, 97, 238, 0.05);
+        }
+
+        .summary-card.has-error {
+            border-color: var(--danger-color);
+            opacity: 0.7;
+        }
+
+        .summary-card .count {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--primary-color);
+        }
+
+        .summary-card .name {
+            font-size: 0.85rem;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+
+        .summary-card .error-badge {
+            font-size: 0.7rem;
+            color: var(--danger-color);
+            margin-top: 5px;
+        }
+
+        /* 결과 섹션 */
+        .results-section {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            overflow: hidden;
+        }
+
+        .results-header {
+            padding: 20px;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .results-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--dark-color);
+        }
+
+        .results-title span {
+            color: var(--primary-color);
+        }
+
+        /* 탭 */
+        .tab-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .tab-btn {
+            padding: 8px 16px;
+            border: 1px solid #e9ecef;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        .tab-btn:hover, .tab-btn.active {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+
+        /* 테이블 */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .data-table th {
+            background: #f8f9fa;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: #495057;
+            border-bottom: 2px solid #e9ecef;
+            position: sticky;
+            top: 0;
+        }
+
+        .data-table td {
+            padding: 15px;
+            border-bottom: 1px solid #e9ecef;
+            font-size: 0.9rem;
+        }
+
+        .data-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .source-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            background: rgba(67, 97, 238, 0.1);
+            color: var(--primary-color);
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .title-link {
+            color: var(--dark-color);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .title-link:hover {
+            color: var(--primary-color);
+        }
+
+        .notice-badge {
+            background: var(--danger-color);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            margin-right: 5px;
+        }
+
+        /* 페이지네이션 */
+        .pagination-wrapper {
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 5px;
+        }
+
+        .page-btn {
+            padding: 8px 14px;
+            border: 1px solid #e9ecef;
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .page-btn:hover, .page-btn.active {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+
+        /* 로딩 */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255,255,255,0.95);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
+
+        .loading-overlay.show { display: flex; }
+
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid #e9ecef;
+            border-top-color: var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .loading-text {
+            margin-top: 20px;
+            font-size: 1.1rem;
+            color: var(--dark-color);
+        }
+
+        .loading-progress {
+            margin-top: 10px;
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+
+        /* 빈 상태 */
+        .empty-state {
+            text-align: center;
+            padding: 80px 20px;
+            color: #6c757d;
+        }
+
+        .empty-state i {
+            font-size: 5rem;
+            margin-bottom: 20px;
+            opacity: 0.2;
+        }
+
+        .empty-state h4 {
+            margin-bottom: 10px;
+            color: var(--dark-color);
+        }
+
+        /* 네비게이션 */
+        .nav-links {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+        }
+
+        .nav-links a {
+            color: rgba(255,255,255,0.7);
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover {
+            color: white;
+        }
+
+        /* 반응형 */
+        @media (max-width: 768px) {
+            .search-box {
+                flex-direction: column;
+            }
+
+            .btn-search {
+                justify-content: center;
+            }
+
+            .summary-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        /* 토스트 */
+        .toast-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 3000;
+        }
+
+        .toast {
+            background: var(--dark-color);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-top: 10px;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .table-container {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <!-- 헤더 -->
+    <header class="top-header">
+        <div class="nav-links">
+            <a href="/"><i class="bi bi-grid"></i> 개별 검색</a>
+        </div>
+        <h1><i class="bi bi-search"></i> 통합 검색</h1>
+        <p>모든 크롤러에서 한번에 검색합니다</p>
+    </header>
+
+    <!-- 검색 영역 -->
+    <div class="search-section">
+        <div class="search-box">
+            <input type="text" class="search-input" id="searchKeyword" placeholder="검색어를 입력하세요..." onkeypress="handleKeyPress(event)">
+            <button class="btn-search" id="searchBtn" onclick="performSearch()">
+                <i class="bi bi-search"></i> 전체 검색
+            </button>
+        </div>
+
+        <!-- 날짜 필터 -->
+        <div class="date-filter" style="margin-top: 20px; display: flex; gap: 15px; justify-content: center; align-items: center; flex-wrap: wrap;">
+            <label style="font-size: 0.9rem; color: #6c757d;">
+                <i class="bi bi-calendar3"></i> 기간:
+            </label>
+            <input type="date" id="startDate" class="date-input" autocomplete="off" style="padding: 8px 12px; border: 2px solid #e9ecef; border-radius: 8px; font-size: 0.9rem;">
+            <span style="color: #6c757d;">~</span>
+            <input type="date" id="endDate" class="date-input" autocomplete="off" style="padding: 8px 12px; border: 2px solid #e9ecef; border-radius: 8px; font-size: 0.9rem;">
+            <div style="display: flex; gap: 8px;">
+                <button onclick="setDateRange(7)" class="date-preset" style="padding: 6px 12px; border: 1px solid #e9ecef; background: white; border-radius: 6px; cursor: pointer; font-size: 0.8rem;">1주일</button>
+                <button onclick="setDateRange(30)" class="date-preset" style="padding: 6px 12px; border: 1px solid #e9ecef; background: white; border-radius: 6px; cursor: pointer; font-size: 0.8rem;">1개월</button>
+                <button onclick="setDateRange(90)" class="date-preset" style="padding: 6px 12px; border: 1px solid #e9ecef; background: white; border-radius: 6px; cursor: pointer; font-size: 0.8rem;">3개월</button>
+                <button onclick="clearDateFilter()" class="date-preset" style="padding: 6px 12px; border: 1px solid #e9ecef; background: white; border-radius: 6px; cursor: pointer; font-size: 0.8rem;">전체</button>
+            </div>
+        </div>
+
+        <div class="search-options" style="margin-top: 15px;">
+            <label>
+                <input type="checkbox" id="optNara" checked> 나라장터
+            </label>
+            <label>
+                <input type="checkbox" id="optAlio" checked> 알리오
+            </label>
+            <label>
+                <input type="checkbox" id="optAlioItem" checked> 알리오 물자
+            </label>
+            <label>
+                <input type="checkbox" id="optLH" checked> LH 파트너몰
+            </label>
+            <label>
+                <input type="checkbox" id="optGTDC" checked> 강릉관광개발공사
+            </label>
+            <label>
+                <input type="checkbox" id="optGDCO" checked> 강원개발공사
+            </label>
+            <label>
+                <input type="checkbox" id="optGMDC" checked> 거제해양관광개발공사
+            </label>
+            <label>
+                <input type="checkbox" id="optGNDC" checked> 경남개발공사
+            </label>
+        </div>
+    </div>
+
+    <!-- 메인 컨테이너 -->
+    <div class="container-main">
+        <!-- 요약 카드 (검색 후 표시) -->
+        <div class="summary-grid" id="summaryGrid" style="display: none;"></div>
+
+        <!-- 결과 섹션 -->
+        <div class="results-section" id="resultsSection" style="display: none;">
+            <div class="results-header">
+                <h3 class="results-title">
+                    검색 결과: <span id="totalCount">0</span>건
+                </h3>
+                <div class="tab-buttons" id="tabButtons">
+                    <button class="tab-btn active" onclick="filterResults('all')">전체</button>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 120px;">출처</th>
+                            <th>제목</th>
+                            <th style="width: 100px;">날짜</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+
+            <div class="pagination-wrapper" id="pagination"></div>
+        </div>
+
+        <!-- 빈 상태 -->
+        <div class="empty-state" id="emptyState">
+            <i class="bi bi-search"></i>
+            <h4>검색어를 입력하세요</h4>
+            <p>모든 크롤러에서 동시에 검색합니다</p>
+        </div>
+    </div>
+
+    <!-- 로딩 -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner"></div>
+        <div class="loading-text">검색 중...</div>
+        <div class="loading-progress" id="loadingProgress">9개 크롤러에서 검색 중</div>
+    </div>
+
+    <!-- 토스트 -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script>
+        // 상태
+        let allResults = {};
+        let summaryData = {};
+        let currentFilter = 'all';
+        let currentPage = 1;
+        const pageSize = 30;
+        let dateStart = null;
+        let dateEnd = null;
+        let dateFilterEnabled = false;  // 날짜 필터 활성화 여부
+
+        // 크롤러 매핑
+        const crawlerNames = {
+            nara: '나라장터',
+            alio: '알리오 입찰',
+            alio_item: '알리오 물자',
+            lh: 'LH 파트너몰',
+            gtdc: '강릉관광',
+            gdco: '강원개발 공지',
+            gdco_bid: '강원개발 입찰',
+            gmdc: '거제해양',
+            gndc: '경남개발'
+        };
+
+        const crawlerOptions = {
+            nara: 'optNara',
+            alio: 'optAlio',
+            alio_item: 'optAlioItem',
+            lh: 'optLH',
+            gtdc: 'optGTDC',
+            gdco: 'optGDCO',
+            gdco_bid: 'optGDCO',
+            gmdc: 'optGMDC',
+            gndc: 'optGNDC'
+        };
+
+        // 검색 실행
+        async function performSearch() {
+            const keyword = document.getElementById('searchKeyword').value.trim();
+            if (!keyword) {
+                showToast('검색어를 입력해주세요', 'warning');
+                return;
+            }
+
+            showLoading(true);
+            document.getElementById('searchBtn').disabled = true;
+
+            try {
+                const response = await fetch(`/api/search_all?keyword=${encodeURIComponent(keyword)}&max_pages=5`);
+                const data = await response.json();
+
+                if (data.success) {
+                    allResults = data.results || {};
+                    summaryData = data.summary || {};
+
+                    console.log('Search results:', allResults);
+                    console.log('Summary:', summaryData);
+
+                    renderSummary();
+                    filterResults('all');
+
+                    document.getElementById('emptyState').style.display = 'none';
+                    document.getElementById('summaryGrid').style.display = 'grid';
+                    document.getElementById('resultsSection').style.display = 'block';
+
+                    showToast(`총 ${data.total_count}건의 결과를 찾았습니다`, 'success');
+                } else {
+                    showToast(data.error || '검색 중 오류 발생', 'error');
+                }
+            } catch (error) {
+                console.error('Search error:', error);
+                showToast('서버 통신 오류', 'error');
+            } finally {
+                showLoading(false);
+                document.getElementById('searchBtn').disabled = false;
+            }
+        }
+
+        // 엔터키
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') performSearch();
+        }
+
+        // 요약 렌더링
+        function renderSummary() {
+            const grid = document.getElementById('summaryGrid');
+            let html = '';
+
+            // 전체 카드
+            const totalCount = Object.values(allResults).reduce((sum, arr) => sum + arr.length, 0);
+            html += `
+                <div class="summary-card active" onclick="filterResults('all')">
+                    <div class="count">${totalCount}</div>
+                    <div class="name">전체</div>
+                </div>
+            `;
+
+            // 각 크롤러별 카드
+            for (const [id, info] of Object.entries(summaryData)) {
+                const hasError = info.error;
+                html += `
+                    <div class="summary-card ${hasError ? 'has-error' : ''}" data-crawler="${id}" onclick="filterResults('${id}')">
+                        <div class="count">${info.count}</div>
+                        <div class="name">${crawlerNames[id] || id}</div>
+                        ${hasError ? `<div class="error-badge">오류</div>` : ''}
+                    </div>
+                `;
+            }
+
+            grid.innerHTML = html;
+
+            // 탭 버튼 업데이트
+            const tabs = document.getElementById('tabButtons');
+            let tabHtml = `<button class="tab-btn active" onclick="filterResults('all')">전체 (${totalCount})</button>`;
+            for (const [id, info] of Object.entries(summaryData)) {
+                if (info.count > 0) {
+                    tabHtml += `<button class="tab-btn" data-crawler="${id}" onclick="filterResults('${id}')">${crawlerNames[id]} (${info.count})</button>`;
+                }
+            }
+            tabs.innerHTML = tabHtml;
+        }
+
+        // 필터링
+        function filterResults(filter) {
+            console.log('filterResults called with:', filter);
+            console.log('allResults keys:', Object.keys(allResults));
+            console.log('allResults[filter]:', allResults[filter] ? allResults[filter].length : 'undefined');
+
+            currentFilter = filter;
+            currentPage = 1;
+
+            // 카드 활성화
+            document.querySelectorAll('.summary-card').forEach(card => {
+                card.classList.remove('active');
+                if (filter === 'all' && !card.dataset.crawler) {
+                    card.classList.add('active');
+                } else if (card.dataset.crawler === filter) {
+                    card.classList.add('active');
+                }
+            });
+
+            // 탭 활성화
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (filter === 'all' && !btn.dataset.crawler) {
+                    btn.classList.add('active');
+                } else if (btn.dataset.crawler === filter) {
+                    btn.classList.add('active');
+                }
+            });
+
+            renderTable();
+        }
+
+        // 테이블 렌더링
+        function renderTable() {
+            const tbody = document.getElementById('tableBody');
+            let data = [];
+
+            // 데이터 수집
+            if (currentFilter === 'all') {
+                // 전체: 모든 결과 합치기
+                for (const [crawlerId, items] of Object.entries(allResults)) {
+                    if (Array.isArray(items)) {
+                        items.forEach(item => {
+                            data.push({ ...item, _source: crawlerId });
+                        });
+                    }
+                }
+                // 날짜순 정렬
+                data.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+            } else {
+                // 특정 크롤러 필터
+                const crawlerData = allResults[currentFilter];
+                if (Array.isArray(crawlerData) && crawlerData.length > 0) {
+                    data = crawlerData.map(item => ({
+                        ...item,
+                        _source: currentFilter
+                    }));
+                }
+            }
+
+            // 날짜 필터 적용 (명시적으로 활성화된 경우만)
+            console.log('Date filter check - enabled:', dateFilterEnabled, 'dateStart:', dateStart, 'dateEnd:', dateEnd);
+            if (dateFilterEnabled && (dateStart || dateEnd)) {
+                const beforeCount = data.length;
+                data = data.filter(item => isDateInRange(item.date));
+                console.log(`Date filter applied: ${beforeCount} -> ${data.length}`);
+            }
+
+            // 페이지네이션
+            const start = (currentPage - 1) * pageSize;
+            const pageData = data.slice(start, start + pageSize);
+
+            if (pageData.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="3" style="text-align: center; padding: 60px; color: #6c757d;">
+                            검색 결과가 없습니다
+                        </td>
+                    </tr>
+                `;
+                document.getElementById('pagination').innerHTML = '';
+                document.getElementById('totalCount').textContent = '0';
+                return;
+            }
+
+            document.getElementById('totalCount').textContent = data.length.toLocaleString();
+
+            tbody.innerHTML = pageData.map(item => `
+                <tr>
+                    <td><span class="source-badge">${crawlerNames[item._source] || item._source}</span></td>
+                    <td>
+                        ${item.is_notice ? '<span class="notice-badge">공지</span>' : ''}
+                        ${item.link ? `<a href="${item.link}" target="_blank" class="title-link">${escapeHtml(item.title)}</a>` : escapeHtml(item.title)}
+                    </td>
+                    <td>${item.date || '-'}</td>
+                </tr>
+            `).join('');
+
+            renderPagination(data.length);
+        }
+
+        // 페이지네이션
+        function renderPagination(total) {
+            const totalPages = Math.ceil(total / pageSize);
+            const pagination = document.getElementById('pagination');
+
+            if (totalPages <= 1) {
+                pagination.innerHTML = '';
+                return;
+            }
+
+            let html = '';
+            html += `<button class="page-btn" onclick="goToPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}><i class="bi bi-chevron-left"></i></button>`;
+
+            const start = Math.max(1, currentPage - 2);
+            const end = Math.min(totalPages, start + 4);
+
+            for (let i = start; i <= end; i++) {
+                html += `<button class="page-btn ${i === currentPage ? 'active' : ''}" onclick="goToPage(${i})">${i}</button>`;
+            }
+
+            html += `<button class="page-btn" onclick="goToPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}><i class="bi bi-chevron-right"></i></button>`;
+
+            pagination.innerHTML = html;
+        }
+
+        function goToPage(page) {
+            const total = currentFilter === 'all'
+                ? Object.values(allResults).reduce((sum, arr) => sum + arr.length, 0)
+                : (allResults[currentFilter] || []).length;
+            const totalPages = Math.ceil(total / pageSize);
+
+            if (page < 1 || page > totalPages) return;
+            currentPage = page;
+            renderTable();
+            document.querySelector('.table-container').scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // 유틸
+        function showLoading(show) {
+            document.getElementById('loadingOverlay').classList.toggle('show', show);
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.style.background = type === 'success' ? '#06d6a0' : type === 'error' ? '#ef476f' : type === 'warning' ? '#ffd166' : '#4361ee';
+            toast.style.color = type === 'warning' ? '#333' : 'white';
+            toast.innerHTML = `<i class="bi bi-${type === 'success' ? 'check-circle' : type === 'error' ? 'x-circle' : 'info-circle'}"></i> ${message}`;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // 날짜 필터 함수
+        function setDateRange(days) {
+            const end = new Date();
+            const start = new Date();
+            start.setDate(start.getDate() - days);
+
+            document.getElementById('startDate').value = formatDate(start);
+            document.getElementById('endDate').value = formatDate(end);
+
+            dateFilterEnabled = true;  // 명시적 활성화
+            applyDateFilter();
+        }
+
+        function clearDateFilter() {
+            document.getElementById('startDate').value = '';
+            document.getElementById('endDate').value = '';
+            dateStart = null;
+            dateEnd = null;
+            dateFilterEnabled = false;  // 비활성화
+            renderTable();
+        }
+
+        function applyDateFilter() {
+            const startVal = document.getElementById('startDate').value;
+            const endVal = document.getElementById('endDate').value;
+
+            dateStart = startVal ? startVal : null;
+            dateEnd = endVal ? endVal : null;
+
+            // 날짜가 입력되면 필터 활성화
+            if (dateStart || dateEnd) {
+                dateFilterEnabled = true;
+            }
+
+            currentPage = 1;
+            renderTable();
+        }
+
+        function formatDate(date) {
+            return date.toISOString().split('T')[0];
+        }
+
+        function parseItemDate(dateStr) {
+            if (!dateStr) return null;
+            // 다양한 날짜 형식 처리: 2024-01-15, 2024.01.15, 2024/01/15
+            const cleaned = dateStr.replace(/[./]/g, '-').substring(0, 10);
+            return cleaned;
+        }
+
+        function isDateInRange(itemDate) {
+            if (!dateStart && !dateEnd) return true;
+
+            const parsed = parseItemDate(itemDate);
+            if (!parsed) return true; // 날짜가 없으면 필터링 안함
+
+            if (dateStart && parsed < dateStart) return false;
+            if (dateEnd && parsed > dateEnd) return false;
+
+            return true;
+        }
+
+        // 페이지 로드 시 날짜 필터 초기화 및 이벤트 리스너 등록
+        function initDateFilter() {
+            dateStart = null;
+            dateEnd = null;
+            dateFilterEnabled = false;
+            document.getElementById('startDate').value = '';
+            document.getElementById('endDate').value = '';
+            console.log('Date filter initialized - enabled:', dateFilterEnabled);
+        }
+
+        // 즉시 초기화
+        initDateFilter();
+
+        // 지연 후 이벤트 리스너 등록 (브라우저 자동완성 이후)
+        setTimeout(function() {
+            initDateFilter();  // 한번 더 초기화
+            // 이벤트 리스너는 초기화 이후에 등록
+            document.getElementById('startDate').addEventListener('change', applyDateFilter);
+            document.getElementById('endDate').addEventListener('change', applyDateFilter);
+            console.log('Date filter event listeners attached');
+        }, 200);
+    </script>
+</body>
+</html>
