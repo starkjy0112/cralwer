@@ -53,6 +53,7 @@ from jpdc_crawler import JPDCCrawler
 from cbdc_crawler import CBDCCrawler
 from cndc_crawler import CNDCCrawler
 from ttdc_crawler import TTDCCrawler
+from gcuc_crawler import GCUCCrawler
 
 app = Flask(__name__)
 
@@ -225,6 +226,12 @@ CRAWLERS = {
         "type": "입찰정보",
         "instance": TTDCCrawler(),
         "url": "http://corp.ttdc.kr"
+    },
+    "gcuc": {
+        "name": "과천도시공사",
+        "type": "개발사업",
+        "instance": GCUCCrawler(),
+        "url": "https://www.gcuc.or.kr"
     },
 }
 
