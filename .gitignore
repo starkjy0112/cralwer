@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+.venv/
+venv/
+*.xlsx
+*.html
+~$*
+downloads/
+Baccarat/
+.claude/
+*.jsonl
+.DS_Store
+baccarat_live.py
