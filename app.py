@@ -54,6 +54,7 @@ from cbdc_crawler import CBDCCrawler
 from cndc_crawler import CNDCCrawler
 from ttdc_crawler import TTDCCrawler
 from gcuc_crawler import GCUCCrawler
+from gumc_crawler import GUMCCrawler
 
 app = Flask(__name__)
 
@@ -232,6 +233,12 @@ CRAWLERS = {
         "type": "개발사업",
         "instance": GCUCCrawler(),
         "url": "https://www.gcuc.or.kr"
+    },
+    "gumc": {
+        "name": "광주도시관리공사",
+        "type": "신술특허당",
+        "instance": GUMCCrawler(),
+        "url": "https://www.gumc.or.kr"
     },
 }
 
