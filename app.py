@@ -54,7 +54,32 @@ from cbdc_crawler import CBDCCrawler
 from cndc_crawler import CNDCCrawler
 from ttdc_crawler import TTDCCrawler
 from gcuc_crawler import GCUCCrawler
-from gumc_crawler import GUMCCrawler
+from gh_crawler import GHCrawler
+from gys_crawler import GYSCrawler
+from guriuc_crawler import GURIUCCrawler
+from gunpouc_crawler import GUNPOUCCrawler
+from ncuc_crawler import NCUCCrawler
+from djuc_crawler import DJUCCrawler
+from dcco_crawler import DCCOCrawler
+from bmc_crawler import BMCCrawler
+from best_crawler import BESTCrawler
+from suwonudc_crawler import SUWONUDCCrawler
+from shsi_crawler import SHSICrawler
+from ansanuc_crawler import ANSANUCCrawler
+from auc_crawler import AUCCrawler
+from yjuc_crawler import YJUCCrawler
+from yuc_crawler import YUCCrawler
+from uuc_crawler import UUCCrawler
+from uiuc_crawler import UIUCCrawler
+from umca_crawler import UMCACrawler
+from ih_crawler import IHCrawler
+from cuc_crawler import CUCCrawler
+from puc_crawler import PUCCrawler
+from pcuc_crawler import PCUCCrawler
+from huic_crawler import HUICCrawler
+from hu_crawler import HUCrawler
+from cuc_bid_crawler import CUCBidCrawler
+from hu_notice_crawler import HUNoticeCrawler
 
 app = Flask(__name__)
 
@@ -234,11 +259,161 @@ CRAWLERS = {
         "instance": GCUCCrawler(),
         "url": "https://www.gcuc.or.kr"
     },
-    "gumc": {
-        "name": "광주도시관리공사",
-        "type": "신술특허당",
-        "instance": GUMCCrawler(),
-        "url": "https://www.gumc.or.kr"
+    "gh": {
+        "name": "경기주택도시공사",
+        "type": "통합검색",
+        "instance": GHCrawler(),
+        "url": "https://www.gh.or.kr"
+    },
+    "gys": {
+        "name": "고양도시관리공사",
+        "type": "입찰공고",
+        "instance": GYSCrawler(),
+        "url": "https://www.gys.or.kr"
+    },
+    "guriuc": {
+        "name": "구리도시공사",
+        "type": "입찰정보",
+        "instance": GURIUCCrawler(),
+        "url": "https://www.guriuc.or.kr"
+    },
+    "gunpouc": {
+        "name": "군포도시공사",
+        "type": "입찰공고",
+        "instance": GUNPOUCCrawler(),
+        "url": "https://www.gunpouc.or.kr"
+    },
+    "ncuc": {
+        "name": "남양주도시공사",
+        "type": "공유재산입찰",
+        "instance": NCUCCrawler(),
+        "url": "https://www.ncuc.or.kr"
+    },
+    "djuc": {
+        "name": "당진도시공사",
+        "type": "입찰공고",
+        "instance": DJUCCrawler(),
+        "url": "https://www.djuc.or.kr"
+    },
+    "dcco": {
+        "name": "대전도시공사",
+        "type": "입찰공고",
+        "instance": DCCOCrawler(),
+        "url": "https://www.dcco.kr"
+    },
+    "bmc": {
+        "name": "부산도시공사",
+        "type": "공지사항",
+        "instance": BMCCrawler(),
+        "url": "https://www.bmc.busan.kr"
+    },
+    "best": {
+        "name": "부천도시공사",
+        "type": "공지사항",
+        "instance": BESTCrawler(),
+        "url": "https://www.best.or.kr"
+    },
+    "suwonudc": {
+        "name": "수원도시공사",
+        "type": "계약/입찰공고",
+        "instance": SUWONUDCCrawler(),
+        "url": "https://www.suwonudc.co.kr"
+    },
+    "shsi": {
+        "name": "시흥도시공사",
+        "type": "고시/공고",
+        "instance": SHSICrawler(),
+        "url": "https://www.shsi.or.kr"
+    },
+    "ansanuc": {
+        "name": "안산도시공사",
+        "type": "입찰공고",
+        "instance": ANSANUCCrawler(),
+        "url": "https://www.ansanuc.net"
+    },
+    "auc": {
+        "name": "안양도시공사",
+        "type": "통합검색",
+        "instance": AUCCrawler(),
+        "url": "https://www.auc.or.kr"
+    },
+    "yjuc": {
+        "name": "양주도시공사",
+        "type": "게시판검색",
+        "instance": YJUCCrawler(),
+        "url": "https://www.yjuc.or.kr"
+    },
+    "yuc": {
+        "name": "용인도시공사",
+        "type": "입찰공고",
+        "instance": YUCCrawler(),
+        "url": "https://www.yuc.co.kr"
+    },
+    "uuc": {
+        "name": "의왕도시공사",
+        "type": "통합검색",
+        "instance": UUCCrawler(),
+        "url": "https://www.uuc.or.kr"
+    },
+    "uiuc": {
+        "name": "의정부도시공사",
+        "type": "입찰공고/고시",
+        "instance": UIUCCrawler(),
+        "url": "https://www.uiuc.or.kr"
+    },
+    "umca": {
+        "name": "울산도시공사",
+        "type": "통합검색",
+        "instance": UMCACrawler(),
+        "url": "https://www.umca.co.kr"
+    },
+    "ih": {
+        "name": "인천도시공사",
+        "type": "통합검색",
+        "instance": IHCrawler(),
+        "url": "https://www.ih.co.kr"
+    },
+    "cuc": {
+        "name": "춘천도시공사",
+        "type": "공지사항",
+        "instance": CUCCrawler(),
+        "url": "https://www.cuc.or.kr"
+    },
+    "puc": {
+        "name": "평택도시공사",
+        "type": "통합검색",
+        "instance": PUCCrawler(),
+        "url": "https://www.puc.or.kr"
+    },
+    "pcuc": {
+        "name": "포천도시공사",
+        "type": "게시판검색",
+        "instance": PCUCCrawler(),
+        "url": "https://www.pcuc.kr"
+    },
+    "huic": {
+        "name": "하남도시공사",
+        "type": "공지사항",
+        "instance": HUICCrawler(),
+        "url": "https://www.huic.co.kr"
+    },
+    "hu": {
+        "name": "화성도시공사",
+        "type": "입찰공고",
+        "instance": HUCrawler(),
+        "url": "https://www.hu.or.kr"
+    },
+    "cuc_bid": {
+        "name": "춘천도시공사",
+        "type": "입찰정보",
+        "instance": CUCBidCrawler(),
+        "url": "https://www.cuc.or.kr"
+    },
+    "hu_notice": {
+        "name": "화성도시공사",
+        "type": "공지사항",
+        "instance": HUNoticeCrawler(),
+        "url": "https://www.hu.or.kr"
     },
 }
 

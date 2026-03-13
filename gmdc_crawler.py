@@ -70,10 +70,9 @@ class GMDCCrawler:
             results.append({
                 "number": num,
                 "title": title,
-                "writer": writer,
-                "views": views,
                 "date": date,
                 "url": link,
+                "organization": writer,
             })
 
         return results
