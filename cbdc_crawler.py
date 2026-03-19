@@ -86,7 +86,7 @@ class CBDCCrawler:
 
         return items, total_pages
 
-    WORKERS = 5
+    WORKERS = 20
 
     def search(self, keyword="", max_pages=10):
         """공지사항을 검색합니다."""

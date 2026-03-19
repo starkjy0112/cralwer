@@ -84,7 +84,7 @@ class GNDCCrawler:
 
         return results
 
-    WORKERS = 5
+    WORKERS = 20
 
     def _fetch_and_parse(self, keyword: str, page: int):
         """페이지 조회 + 파싱"""

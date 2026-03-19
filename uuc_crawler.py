@@ -19,7 +19,7 @@ PAGE_SIZE = 10
 class UUCCrawler:
     """의왕도시공사 통합검색 크롤러"""
 
-    WORKERS = 5
+    WORKERS = 20
 
     def __init__(self):
         self.session = requests.Session()

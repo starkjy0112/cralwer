@@ -1,20 +1,23 @@
 # -*- coding: utf-8 -*-
 """
-국가철도공단 공지사항 크롤러
-https://www.kr.or.kr/boardCnts/list.do?boardID=51
+세종특별자치시청 입찰공고 크롤러
+https://www.sejong.go.kr/prog/publicNotice/kor/sub02_0302/C2/list.do
+POST 기반, 10건/페이지
 """
+import math
+import re
 import requests
 from bs4 import BeautifulSoup
-from urllib.parse import quote
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
-BASE_URL = "https://www.kr.or.kr"
-BOARD_ID = "51"
+BASE_URL = "https://www.sejong.go.kr"
+LIST_URL = f"{BASE_URL}/prog/publicNotice/kor/sub02_0302/C2/list.do"
+PAGE_SIZE = 100
 
 
-class KRCrawler:
-    """국가철도공단 공지사항 크롤러"""
+class SejongBidCrawler:
+    """세종특별자치시청 입찰공고 크롤러"""
 
     def __init__(self):
         self.session = requests.Session()
@@ -27,58 +30,56 @@ class KRCrawler:
         })
 
     def _fetch_page(self, keyword, page):
-        """게시판 목록 한 페이지를 가져옵니다."""
-        params = {
-            "boardID": BOARD_ID,
-            "searchType": "S",  # 제목 검색
-            "searchStr": keyword,
-            "page": page,
+        data = {
+            "pageSize": PAGE_SIZE,
+            "pageIndex": page,
+            "gubun": "C2",
         }
-        response = self.session.get(
-            f"{BASE_URL}/boardCnts/list.do",
-            params=params,
-            timeout=15,
-        )
-        response.encoding = "utf-8"
-        soup = BeautifulSoup(response.text, "html.parser")
+        if keyword:
+            data["searchCondition"] = "not_ancmt_sj"
+            data["searchKeyword"] = keyword
 
-        # 총 페이지 수 추출
-        total_pages = 1
-        page_links = soup.select("a[href*='boardID='][href*='page=']")
-        for link in page_links:
-            href = link.get("href", "")
-            if "page=" in href:
-                try:
-                    p = int(href.split("page=")[-1].split("&")[0])
-                    if p > total_pages:
-                        total_pages = p
-                except ValueError:
-                    pass
+        resp = self.session.post(LIST_URL, data=data, timeout=15)
+        resp.encoding = "utf-8"
+        soup = BeautifulSoup(resp.text, "html.parser")
 
-        # 게시글 파싱
+        # 총 건수: "총 게시물 <strong> 62</strong>"
+        total_count = 0
+        count_div = soup.select_one("div.program--count")
+        if count_div:
+            strong = count_div.select_one("strong")
+            if strong:
+                m = re.search(r'(\d[\d,]*)', strong.get_text())
+                if m:
+                    total_count = int(m.group(1).replace(",", ""))
+
         items = []
         table = soup.select_one("table")
         if not table:
-            return items, total_pages
+            return items, total_count
 
         rows = table.select("tbody tr")
+        if not rows:
+            rows = table.select("tr")[1:]
         for row in rows:
             cells = row.select("td")
             if len(cells) < 5:
                 continue
 
-            link = cells[1].select_one("a")
+            number = cells[0].get_text(strip=True)
+            notice_no = cells[1].get_text(strip=True)
+            title_cell = cells[2]
+            department = cells[3].get_text(strip=True)
+            date = cells[4].get_text(strip=True)
+
+            link = title_cell.select_one("a")
             if not link:
                 continue
 
-            number = cells[0].get_text(strip=True)
-            title = cells[1].get_text(strip=True)
-            author = cells[2].get_text(strip=True)
-            date = cells[4].get_text(strip=True)
-
+            title = link.get_text(strip=True)
             href = link.get("href", "")
-            if href and not href.startswith("http"):
-                detail_url = f"{BASE_URL}/boardCnts/{href}"
+            if href.startswith("/"):
+                detail_url = f"{BASE_URL}{href}"
             else:
                 detail_url = href
 
@@ -87,18 +88,18 @@ class KRCrawler:
                 "title": title,
                 "date": date,
                 "url": detail_url,
-                "organization": author,
+                "organization": "세종특별자치시청",
             })
 
-        return items, total_pages
+        return items, total_count
 
     WORKERS = 20
 
     def search(self, keyword="", max_pages=10):
-        """공지사항을 검색합니다."""
-        first_items, total_pages = self._fetch_page(keyword, 1)
+        first_items, total_count = self._fetch_page(keyword, 1)
+        total_pages = max(1, math.ceil(total_count / PAGE_SIZE))
         actual_pages = min(total_pages, max_pages)
-        print(f"  [Page 1/{actual_pages}] {len(first_items)}건 수집")
+        print(f"  [Page 1/{actual_pages}] {len(first_items)}건 수집 (전체 {total_count}건)")
 
         if actual_pages <= 1:
             all_items = first_items
@@ -123,18 +124,18 @@ class KRCrawler:
                 all_items.extend(page_results[p])
 
         all_items.sort(key=lambda x: x["date"], reverse=True)
-        print(f"[국가철도공단] 완료: 총 {len(all_items)}건")
+        print(f"[세종특별자치시청 입찰공고] 완료: 총 {len(all_items)}건")
         return all_items
 
 
 if __name__ == "__main__":
-    crawler = KRCrawler()
+    crawler = SejongBidCrawler()
     print("=== 전체 조회 (3페이지) ===")
     results = crawler.search("", max_pages=3)
     for r in results[:5]:
         print(f"  [{r['date']}] {r['title'][:50]} | {r['organization']}")
 
-    print("\n=== '공고' 검색 (2페이지) ===")
-    results2 = crawler.search("공고", max_pages=2)
+    print("\n=== '공고' 검색 ===")
+    results2 = crawler.search("공고", max_pages=3)
     for r in results2[:5]:
-        print(f"  [{r['date']}] {r['title'][:50]} | {r['organization']}")
+        print(f"  [{r['date']}] {r['title'][:50]}")

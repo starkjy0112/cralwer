@@ -13,12 +13,13 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 BASE_URL = "https://www.yjuc.or.kr"
 SEARCH_URL = f"{BASE_URL}/contents/search_result.asp"
+PAGE_SIZE = 100
 
 
 class YJUCCrawler:
     """양주도시공사 통합검색 크롤러"""
 
-    WORKERS = 5
+    WORKERS = 20
 
     def __init__(self):
         self.session = requests.Session()
@@ -76,7 +77,7 @@ class YJUCCrawler:
             "tsearchName": keyword,
             "fboard": board,
             "fpage": page,
-            "intPageSize": "10",
+            "intPageSize": str(PAGE_SIZE),
         }
         resp = self.session.get(SEARCH_URL, params=params, timeout=15)
         resp.encoding = "euc-kr"
@@ -89,7 +90,7 @@ class YJUCCrawler:
             "tsearchOpt1": "2",
             "tsearchName": keyword,
             "fpage": "1",
-            "intPageSize": "10",
+            "intPageSize": str(PAGE_SIZE),
         }
         resp = self.session.get(SEARCH_URL, params=params, timeout=15)
         resp.encoding = "euc-kr"

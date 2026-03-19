@@ -1,25 +1,23 @@
 # -*- coding: utf-8 -*-
 """
-고양도시관리공사 입찰공고 크롤러
-https://www.gys.or.kr/subpage/index/46
-EUC-KR 인코딩, GET 기반 페이지네이션
-URL 패턴:
-  전체: /llist/BID/F/GYS/0/0/-/0/{page}/
-  검색: /llist/BID/L/GYS/0/{search_index}/{keyword_euckr}/{page_row}/{page}/
+전북특별자치도청 타기관공고 크롤러
+https://www.jeonbuk.go.kr/board/list.jeonbuk?boardId=BBS_0000006&menuCd=DOM_000000102002006000
+GET 기반, 10건/페이지
 """
+import math
 import re
 import requests
 from bs4 import BeautifulSoup
-from urllib.parse import quote
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
-BASE_URL = "https://www.gys.or.kr"
-BOARD_PATH = "/subpage/index/46"
+BASE_URL = "https://www.jeonbuk.go.kr"
+LIST_URL = f"{BASE_URL}/board/list.jeonbuk"
+PAGE_SIZE = 100
 
 
-class GYSCrawler:
-    """고양도시관리공사 입찰공고 크롤러"""
+class JeonbukOtherCrawler:
+    """전북특별자치도청 타기관공고 크롤러"""
 
     def __init__(self):
         self.session = requests.Session()
@@ -30,79 +28,78 @@ class GYSCrawler:
                 "Chrome/120.0.0.0 Safari/537.36"
             ),
         })
-        self.session.verify = False
-
-    def _build_url(self, keyword, page):
-        """페이지 URL을 생성합니다."""
-        if keyword and keyword.strip():
-            encoded = quote(keyword.encode("euc-kr"))
-            # search_index=0 (전체), page_row=1 (10건)
-            return f"{BASE_URL}{BOARD_PATH}/llist/BID/L/GYS/0/0/{encoded}/1/{page}/"
-        else:
-            return f"{BASE_URL}{BOARD_PATH}/llist/BID/F/GYS/0/0/-/0/{page}/"
 
     def _fetch_page(self, keyword, page):
-        """게시판 목록 한 페이지를 가져옵니다."""
-        url = self._build_url(keyword, page)
-        resp = self.session.get(url, timeout=15)
-        resp.encoding = "euc-kr"
+        params = {
+            "boardId": "BBS_0000006",
+            "menuCd": "DOM_000000102002006000",
+            "listCel": "1",
+            "listRow": PAGE_SIZE,
+            "paging": "ok",
+            "searchType": "DATA_TITLE",
+            "startPage": page,
+        }
+        if keyword:
+            params["keyword"] = keyword
+
+        resp = self.session.get(LIST_URL, params=params, timeout=15)
+        resp.encoding = "utf-8"
         soup = BeautifulSoup(resp.text, "html.parser")
 
-        # 마지막 페이지 번호 추출
-        total_pages = 1
-        for a in soup.select("a"):
-            href = a.get("href", "")
-            if "/llist/" in href:
-                parts = href.rstrip("/").split("/")
-                try:
-                    p = int(parts[-1])
-                    if p > total_pages:
-                        total_pages = p
-                except ValueError:
-                    pass
+        # 총 건수: "총 21448건(1/2145 페이지)"
+        total_count = 0
+        total_el = soup.select_one("p.bbs_total")
+        if total_el:
+            m = re.search(r'총\s*(\d[\d,]*)\s*건', total_el.get_text())
+            if m:
+                total_count = int(m.group(1).replace(",", ""))
 
-        # 게시글 파싱
         items = []
-        table = soup.select_one("table")
+        table = soup.select_one("table.bbs_table")
         if not table:
-            return items, total_pages
+            return items, total_count
 
-        rows = table.select("tr")[1:]  # 헤더 제외
+        # 컬럼: 번호, 제목, 첨부, 작성자, 작성일, 조회
+        rows = table.select("tbody tr")
         for row in rows:
             cells = row.select("td")
-            if len(cells) < 4:
+            if len(cells) < 5:
                 continue
 
             number = cells[0].get_text(strip=True)
             title_cell = cells[1]
-            author = cells[2].get_text(strip=True)
-            date = cells[3].get_text(strip=True)
-
             link = title_cell.select_one("a")
             if not link:
                 continue
 
             title = link.get_text(strip=True)
             href = link.get("href", "")
-            detail_url = href if href.startswith("http") else f"{BASE_URL}{href}"
+            if href.startswith("/"):
+                detail_url = f"{BASE_URL}{href}"
+            else:
+                detail_url = href
+
+            # 첨부(2), 작성자(3), 작성일(4), 조회(5)
+            author = cells[3].get_text(strip=True) if len(cells) >= 5 else "전북특별자치도청"
+            date = cells[4].get_text(strip=True) if len(cells) >= 6 else cells[-2].get_text(strip=True)
 
             items.append({
                 "number": number,
                 "title": title,
                 "date": date,
                 "url": detail_url,
-                "organization": author,
+                "organization": "전북특별자치도청",
             })
 
-        return items, total_pages
+        return items, total_count
 
     WORKERS = 20
 
     def search(self, keyword="", max_pages=10):
-        """입찰공고를 검색합니다."""
-        first_items, total_pages = self._fetch_page(keyword, 1)
+        first_items, total_count = self._fetch_page(keyword, 1)
+        total_pages = max(1, math.ceil(total_count / PAGE_SIZE))
         actual_pages = min(total_pages, max_pages)
-        print(f"  [Page 1/{actual_pages}] {len(first_items)}건 수집")
+        print(f"  [Page 1/{actual_pages}] {len(first_items)}건 수집 (전체 {total_count}건)")
 
         if actual_pages <= 1:
             all_items = first_items
@@ -127,21 +124,18 @@ class GYSCrawler:
                 all_items.extend(page_results[p])
 
         all_items.sort(key=lambda x: x["date"], reverse=True)
-        print(f"[고양도시관리공사] 완료: 총 {len(all_items)}건")
+        print(f"[전북특별자치도청 타기관공고] 완료: 총 {len(all_items)}건")
         return all_items
 
 
 if __name__ == "__main__":
-    import warnings
-    warnings.filterwarnings("ignore")
-
-    crawler = GYSCrawler()
+    crawler = JeonbukOtherCrawler()
     print("=== 전체 조회 (3페이지) ===")
     results = crawler.search("", max_pages=3)
     for r in results[:5]:
         print(f"  [{r['date']}] {r['title'][:50]} | {r['organization']}")
 
-    print("\n=== '공고' 검색 (3페이지) ===")
+    print("\n=== '공고' 검색 ===")
     results2 = crawler.search("공고", max_pages=3)
     for r in results2[:5]:
-        print(f"  [{r['date']}] {r['title'][:50]} | {r['organization']}")
+        print(f"  [{r['date']}] {r['title'][:50]}")

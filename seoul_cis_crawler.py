@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-용인도시공사 입찰공고 크롤러
-https://www.yuc.co.kr/www/brd/m_438/list.do
-GET 기반, 10건/페이지
+서울특별시청 건설알림이 공지사항 크롤러
+https://cis.seoul.go.kr/TotalAlimi_new/Notice.action
+GET 기반, 10건/페이지, Struts .action 엔드포인트
 """
 import math
 import re
@@ -11,13 +11,13 @@ from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
-BASE_URL = "https://www.yuc.co.kr"
-LIST_URL = f"{BASE_URL}/www/brd/m_438/list.do"
+BASE_URL = "https://cis.seoul.go.kr"
+LIST_URL = f"{BASE_URL}/TotalAlimi_new/Notice.action"
 PAGE_SIZE = 10
 
 
-class YUCCrawler:
-    """용인도시공사 입찰공고 크롤러"""
+class SeoulCISCrawler:
+    """서울특별시청 건설알림이 공지사항 크롤러"""
 
     def __init__(self):
         self.session = requests.Session()
@@ -29,38 +29,42 @@ class YUCCrawler:
             ),
         })
 
-    def _fetch_page(self, keyword, page):
+    def _fetch_page(self, keyword, page, start_date=None, end_date=None):
         params = {
-            "page": page,
-            "srchFr": "",
-            "srchTo": "",
-            "srchWord": keyword,
-            "srchTp": "0",  # 제목
+            "pageNo": page,
+            "start_ymd": start_date if start_date else "",
+            "end_ymd": end_date if end_date else "",
+            "pic_div": "1",
         }
+        if keyword:
+            params["pic_text"] = keyword
+        else:
+            params["pic_text"] = ""
+
         resp = self.session.get(LIST_URL, params=params, timeout=15)
         resp.encoding = "utf-8"
         soup = BeautifulSoup(resp.text, "html.parser")
 
-        # 총 건수: "전체 1299"
+        # 총 건수: 첫 번째 row의 번호가 전체 건수 (내림차순 번호)
         total_count = 0
-        m = re.search(r'전체\s*(\d[\d,]*)', soup.get_text())
-        if m:
-            total_count = int(m.group(1).replace(",", ""))
 
         items = []
-        table = soup.select_one("table")
+        table = soup.select_one("table.tbStyle1")
         if not table:
             return items, total_count
 
-        rows = table.select("tr")[1:]
+        rows = table.select("tbody tr") or table.select("tr")[1:]
         for row in rows:
             cells = row.select("td")
-            if len(cells) < 3:
+            if len(cells) < 6:
                 continue
 
             number = cells[0].get_text(strip=True)
             title_cell = cells[1]
-            date = cells[2].get_text(strip=True)
+            # cells[2] is 정보보기 (skip)
+            dept = cells[3].get_text(strip=True)
+            # cells[4] is 조회수 (skip)
+            date = cells[5].get_text(strip=True)
 
             link = title_cell.select_one("a")
             if not link:
@@ -68,27 +72,28 @@ class YUCCrawler:
 
             title = link.get_text(strip=True)
             href = link.get("href", "")
-            if href.startswith("./"):
-                detail_url = f"{BASE_URL}/www/brd/m_438/{href[2:]}"
-            elif href.startswith("/"):
+            if href.startswith("/"):
                 detail_url = f"{BASE_URL}{href}"
             else:
                 detail_url = href
+
+            if not items and number.isdigit():
+                total_count = int(number)
 
             items.append({
                 "number": number,
                 "title": title,
                 "date": date,
                 "url": detail_url,
-                "organization": "용인도시공사",
+                "organization": "서울특별시청",
             })
 
         return items, total_count
 
     WORKERS = 20
 
-    def search(self, keyword="", max_pages=10):
-        first_items, total_count = self._fetch_page(keyword, 1)
+    def search(self, keyword="", max_pages=10, start_date=None, end_date=None):
+        first_items, total_count = self._fetch_page(keyword, 1, start_date, end_date)
         total_pages = max(1, math.ceil(total_count / PAGE_SIZE))
         actual_pages = min(total_pages, max_pages)
         print(f"  [Page 1/{actual_pages}] {len(first_items)}건 수집 (전체 {total_count}건)")
@@ -99,7 +104,7 @@ class YUCCrawler:
             page_results = {1: first_items}
             with ThreadPoolExecutor(max_workers=self.WORKERS) as executor:
                 futures = {
-                    executor.submit(self._fetch_page, keyword, p): p
+                    executor.submit(self._fetch_page, keyword, p, start_date, end_date): p
                     for p in range(2, actual_pages + 1)
                 }
                 for future in as_completed(futures):
@@ -116,18 +121,18 @@ class YUCCrawler:
                 all_items.extend(page_results[p])
 
         all_items.sort(key=lambda x: x["date"], reverse=True)
-        print(f"[용인도시공사] 완료: 총 {len(all_items)}건")
+        print(f"[서울특별시청 건설알림이] 완료: 총 {len(all_items)}건")
         return all_items
 
 
 if __name__ == "__main__":
-    crawler = YUCCrawler()
+    crawler = SeoulCISCrawler()
     print("=== 전체 조회 (3페이지) ===")
     results = crawler.search("", max_pages=3)
     for r in results[:5]:
-        print(f"  [{r['date']}] {r['title'][:50]}")
+        print(f"  [{r['date']}] {r['title'][:50]} | {r['organization']}")
 
-    print("\n=== '공고' 검색 (3페이지) ===")
-    results2 = crawler.search("공고", max_pages=3)
+    print("\n=== '공사' 검색 ===")
+    results2 = crawler.search("공사", max_pages=3)
     for r in results2[:5]:
         print(f"  [{r['date']}] {r['title'][:50]}")

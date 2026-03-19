@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-용인도시공사 입찰공고 크롤러
-https://www.yuc.co.kr/www/brd/m_438/list.do
+울산광역시청 고시공고 크롤러
+https://www.ulsan.go.kr/u/rep/transfer/notice/list.ulsan?mId=001004002000000000
 GET 기반, 10건/페이지
 """
 import math
@@ -11,13 +11,13 @@ from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
-BASE_URL = "https://www.yuc.co.kr"
-LIST_URL = f"{BASE_URL}/www/brd/m_438/list.do"
+BASE_URL = "https://www.ulsan.go.kr"
+LIST_URL = f"{BASE_URL}/u/rep/transfer/notice/list.ulsan"
 PAGE_SIZE = 10
 
 
-class YUCCrawler:
-    """용인도시공사 입찰공고 크롤러"""
+class UlsanCrawler:
+    """울산광역시청 고시공고 크롤러"""
 
     def __init__(self):
         self.session = requests.Session()
@@ -31,36 +31,43 @@ class YUCCrawler:
 
     def _fetch_page(self, keyword, page):
         params = {
-            "page": page,
-            "srchFr": "",
-            "srchTo": "",
-            "srchWord": keyword,
-            "srchTp": "0",  # 제목
+            "mId": "001004002000000000",
+            "curPage": page,
         }
+        if keyword:
+            params["srchType"] = "srchSj"
+            params["srchWord"] = keyword
+
         resp = self.session.get(LIST_URL, params=params, timeout=15)
         resp.encoding = "utf-8"
         soup = BeautifulSoup(resp.text, "html.parser")
 
-        # 총 건수: "전체 1299"
+        # 총 건수: "총 게시물 : <strong>28,526</strong> 건"
         total_count = 0
-        m = re.search(r'전체\s*(\d[\d,]*)', soup.get_text())
-        if m:
-            total_count = int(m.group(1).replace(",", ""))
+        total_el = soup.select_one("p.board_total strong")
+        if total_el:
+            total_count = int(total_el.get_text(strip=True).replace(",", ""))
+        else:
+            m = re.search(r'총\s*게시물\s*:\s*(\d[\d,]*)', soup.get_text())
+            if m:
+                total_count = int(m.group(1).replace(",", ""))
 
         items = []
-        table = soup.select_one("table")
+        table = soup.select_one("table.tbl_bd_list")
         if not table:
             return items, total_count
 
-        rows = table.select("tr")[1:]
+        rows = table.select("tbody tr")
         for row in rows:
             cells = row.select("td")
-            if len(cells) < 3:
+            if len(cells) < 6:
                 continue
 
             number = cells[0].get_text(strip=True)
             title_cell = cells[1]
-            date = cells[2].get_text(strip=True)
+            dept = cells[2].get_text(strip=True)
+            # cells[3] = 전화번호, cells[4] = 고시공고번호, cells[5] = 게시일자
+            date_str = cells[5].get_text(strip=True)
 
             link = title_cell.select_one("a")
             if not link:
@@ -69,7 +76,8 @@ class YUCCrawler:
             title = link.get_text(strip=True)
             href = link.get("href", "")
             if href.startswith("./"):
-                detail_url = f"{BASE_URL}/www/brd/m_438/{href[2:]}"
+                # relative URL like ./45742.ulsan?mId=001004002000000000&gosiGbn=A
+                detail_url = f"{BASE_URL}/u/rep/transfer/notice/{href[2:]}"
             elif href.startswith("/"):
                 detail_url = f"{BASE_URL}{href}"
             else:
@@ -78,9 +86,9 @@ class YUCCrawler:
             items.append({
                 "number": number,
                 "title": title,
-                "date": date,
+                "date": date_str,
                 "url": detail_url,
-                "organization": "용인도시공사",
+                "organization": dept if dept else "울산광역시청",
             })
 
         return items, total_count
@@ -116,18 +124,18 @@ class YUCCrawler:
                 all_items.extend(page_results[p])
 
         all_items.sort(key=lambda x: x["date"], reverse=True)
-        print(f"[용인도시공사] 완료: 총 {len(all_items)}건")
+        print(f"[울산광역시청] 완료: 총 {len(all_items)}건")
         return all_items
 
 
 if __name__ == "__main__":
-    crawler = YUCCrawler()
+    crawler = UlsanCrawler()
     print("=== 전체 조회 (3페이지) ===")
     results = crawler.search("", max_pages=3)
     for r in results[:5]:
-        print(f"  [{r['date']}] {r['title'][:50]}")
+        print(f"  [{r['date']}] {r['title'][:50]} | {r['organization']}")
 
-    print("\n=== '공고' 검색 (3페이지) ===")
+    print("\n=== '공고' 검색 ===")
     results2 = crawler.search("공고", max_pages=3)
     for r in results2[:5]:
         print(f"  [{r['date']}] {r['title'][:50]}")

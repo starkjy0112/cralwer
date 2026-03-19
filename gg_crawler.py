@@ -1,25 +1,22 @@
 # -*- coding: utf-8 -*-
 """
-인천도시공사 게시물 검색 크롤러
-https://www.ih.co.kr/search/searchBbs.do?query=
-GET 기반, 10건/페이지, pgno 파라미터
+경기도청 고시공고 크롤러
+https://www.gg.go.kr/bbs/board.do?bsIdx=469&menuId=1547
+AJAX POST 기반 (/ajax/board/getList.do), 10건/페이지, offset 방식
 """
 import math
-import re
 import requests
-from bs4 import BeautifulSoup
+from urllib.parse import quote
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
-BASE_URL = "https://www.ih.co.kr"
-SEARCH_URL = f"{BASE_URL}/search/searchBbs.do"
+BASE_URL = "https://www.gg.go.kr"
+AJAX_URL = f"{BASE_URL}/ajax/board/getList.do"
 PAGE_SIZE = 10
 
 
-class IHCrawler:
-    """인천도시공사 게시물 검색 크롤러"""
-
-    WORKERS = 20
+class GGCrawler:
+    """경기도청 고시공고 크롤러"""
 
     def __init__(self):
         self.session = requests.Session()
@@ -29,62 +26,49 @@ class IHCrawler:
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
                 "Chrome/120.0.0.0 Safari/537.36"
             ),
+            "X-Requested-With": "XMLHttpRequest",
         })
 
     def _fetch_page(self, keyword, page):
-        params = {
-            "query": keyword,
-            "pgno": page,
+        offset = (page - 1) * PAGE_SIZE
+        post_data = {
+            "bsIdx": "469",
+            "bcIdx": "0",
+            "menuId": "1547",
+            "offset": str(offset),
         }
-        resp = self.session.get(SEARCH_URL, params=params, timeout=15)
-        resp.encoding = "utf-8"
-        soup = BeautifulSoup(resp.text, "html.parser")
+        if keyword:
+            post_data["keyword"] = keyword
+            post_data["keyfield"] = "SUBJECTANDREMARK"
 
-        total_count = 0
-        m = re.search(r'(\d[\d,]*)\s*건', soup.get_text())
-        if m:
-            total_count = int(m.group(1).replace(",", ""))
+        resp = self.session.post(AJAX_URL, data=post_data, timeout=15)
+        resp.encoding = "utf-8"
+        data = resp.json()
+
+        total_count = int(data.get("total", 0))
 
         items = []
-        for dl in soup.find_all("dl"):
-            dt = dl.find("dt")
-            if not dt:
-                continue
+        for item in data.get("items", []):
+            b_idx = item.get("B_IDX", "")
+            subject = item.get("SUBJECT", "")
+            writer = item.get("WRITER", "")
+            date = item.get("WRITE_DATE2", "")
 
-            link = dt.find("a")
-            if not link:
-                continue
-
-            title = link.get_text(strip=True)
-            if not title:
-                continue
-
-            href = link.get("href", "")
-            detail_url = f"{BASE_URL}{href}" if href.startswith("/") else href
-
-            date = ""
-            dds = dl.find_all("dd")
-            for dd in dds:
-                m2 = re.search(r'(\d{4}[-./]\d{1,2}[-./]\d{1,2})', dd.get_text())
-                if m2:
-                    date = m2.group(1)
-                    break
+            detail_url = f"{BASE_URL}/bbs/boardView.do?bIdx={b_idx}&bsIdx=469&menuId=1547"
 
             items.append({
-                "number": "",
-                "title": title,
+                "number": str(b_idx),
+                "title": subject,
                 "date": date,
                 "url": detail_url,
-                "organization": "인천도시공사",
+                "organization": writer if writer else "경기도청",
             })
 
         return items, total_count
 
-    def search(self, keyword="", max_pages=10):
-        if not keyword:
-            print("[인천도시공사] 통합검색은 키워드가 필요합니다")
-            return []
+    WORKERS = 20
 
+    def search(self, keyword="", max_pages=10):
         first_items, total_count = self._fetch_page(keyword, 1)
         total_pages = max(1, math.ceil(total_count / PAGE_SIZE))
         actual_pages = min(total_pages, max_pages)
@@ -113,13 +97,18 @@ class IHCrawler:
                 all_items.extend(page_results[p])
 
         all_items.sort(key=lambda x: x["date"], reverse=True)
-        print(f"[인천도시공사] 완료: 총 {len(all_items)}건")
+        print(f"[경기도청] 완료: 총 {len(all_items)}건")
         return all_items
 
 
 if __name__ == "__main__":
-    crawler = IHCrawler()
-    print("=== '공고' 검색 ===")
-    results = crawler.search("공고", max_pages=3)
+    crawler = GGCrawler()
+    print("=== 전체 조회 (3페이지) ===")
+    results = crawler.search("", max_pages=3)
     for r in results[:5]:
+        print(f"  [{r['date']}] {r['title'][:50]} | {r['organization']}")
+
+    print("\n=== '공고' 검색 ===")
+    results2 = crawler.search("공고", max_pages=3)
+    for r in results2[:5]:
         print(f"  [{r['date']}] {r['title'][:50]}")

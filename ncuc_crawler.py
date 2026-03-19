@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 BASE_URL = "https://www.ncuc.or.kr"
 BOARD_PATH = "/main/35"
-PAGE_SIZE = 20
+PAGE_SIZE = 100
 
 
 class NCUCCrawler:
@@ -90,7 +90,7 @@ class NCUCCrawler:
 
         return items, total_pages
 
-    WORKERS = 5
+    WORKERS = 20
 
     def search(self, keyword="", max_pages=10):
         """공유재산입찰을 검색합니다."""

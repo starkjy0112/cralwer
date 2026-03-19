@@ -19,7 +19,7 @@ PAGE_SIZE = 10
 class PCUCCrawler:
     """포천도시공사 게시판검색 크롤러"""
 
-    WORKERS = 5
+    WORKERS = 20
 
     def __init__(self):
         self.session = requests.Session()

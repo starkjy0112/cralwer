@@ -105,7 +105,7 @@ class SDCOCrawler:
             print(f"[ERROR] Failed to fetch page {page}: {e}")
             return None
 
-    WORKERS = 5
+    WORKERS = 20
 
     def _fetch_and_parse(self, page: int, keyword: str) -> list[dict]:
         """페이지 조회 + 파싱"""

@@ -45,7 +45,7 @@ class EkrCrawler:
         )
         self.session.verify = False
 
-    WORKERS = 5
+    WORKERS = 20
 
     def search(self, keyword="", max_pages=10):
         """

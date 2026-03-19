@@ -111,7 +111,7 @@ class GHCrawler:
 
         return items
 
-    WORKERS = 5
+    WORKERS = 20
 
     def _fetch_category(self, keyword, cat, max_pages):
         """한 카테고리의 모든 페이지를 가져옵니다."""

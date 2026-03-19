@@ -13,13 +13,13 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 BASE_URL = "https://www.umca.co.kr"
 SEARCH_URL = f"{BASE_URL}/search/front/Search.jsp"
-PAGE_SIZE = 20
+PAGE_SIZE = 100
 
 
 class UMCACrawler:
     """울산도시공사 통합검색 크롤러"""
 
-    WORKERS = 5
+    WORKERS = 20
 
     def __init__(self):
         self.session = requests.Session()

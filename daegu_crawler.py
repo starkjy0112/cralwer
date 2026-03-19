@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-용인도시공사 입찰공고 크롤러
-https://www.yuc.co.kr/www/brd/m_438/list.do
-GET 기반, 10건/페이지
+대구광역시청 고시공고 크롤러
+https://www.daegu.go.kr/index.do?menu_id=00940170&menu_link=/front/daeguSidoGosi/daeguSidoGosiList.do
+POST 기반, 10건/페이지, pageIndex 방식
 """
 import math
 import re
@@ -11,13 +11,13 @@ from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
-BASE_URL = "https://www.yuc.co.kr"
-LIST_URL = f"{BASE_URL}/www/brd/m_438/list.do"
+BASE_URL = "https://www.daegu.go.kr"
+LIST_URL = f"{BASE_URL}/index.do"
 PAGE_SIZE = 10
 
 
-class YUCCrawler:
-    """용인도시공사 입찰공고 크롤러"""
+class DaeguCrawler:
+    """대구광역시청 고시공고 크롤러"""
 
     def __init__(self):
         self.session = requests.Session()
@@ -30,57 +30,81 @@ class YUCCrawler:
         })
 
     def _fetch_page(self, keyword, page):
-        params = {
-            "page": page,
-            "srchFr": "",
-            "srchTo": "",
-            "srchWord": keyword,
-            "srchTp": "0",  # 제목
+        post_data = {
+            "menu_id": "00940170",
+            "menu_link": "/front/daeguSidoGosi/daeguSidoGosiList.do",
+            "pageIndex": str(page),
+            "sno": "",
+            "gosi_gbn": "",
+            "searchBgnDe": "",
+            "searchEndDe": "",
+            "searchAnnounce_no": "",
+            "searchGosi_gbn": "",
+            "searchDept_nm": "",
+            "postPerPage": "0",
         }
-        resp = self.session.get(LIST_URL, params=params, timeout=15)
+        if keyword:
+            post_data["searchTitle"] = keyword
+
+        resp = self.session.post(LIST_URL, data=post_data, timeout=15)
         resp.encoding = "utf-8"
         soup = BeautifulSoup(resp.text, "html.parser")
 
-        # 총 건수: "전체 1299"
+        # 총 건수: pagination에서 마지막 페이지 번호로 추정
         total_count = 0
-        m = re.search(r'전체\s*(\d[\d,]*)', soup.get_text())
-        if m:
-            total_count = int(m.group(1).replace(",", ""))
+        pagination = soup.select_one("div.pagination")
+        if pagination:
+            # 마지막 페이지 링크에서 총 페이지 수 추출
+            last_link = pagination.select("a.page_nextend")
+            if last_link:
+                onclick = last_link[0].get("onclick", "")
+                m = re.search(r'fn_egov_link_page\((\d+)', onclick)
+                if m:
+                    total_pages = int(m.group(1))
+                    total_count = total_pages * PAGE_SIZE
 
         items = []
-        table = soup.select_one("table")
+        table = soup.select_one("table#bbsList")
         if not table:
             return items, total_count
 
-        rows = table.select("tr")[1:]
+        rows = table.select("tbody tr")
         for row in rows:
             cells = row.select("td")
-            if len(cells) < 3:
+            if len(cells) < 5:
                 continue
 
             number = cells[0].get_text(strip=True)
             title_cell = cells[1]
-            date = cells[2].get_text(strip=True)
+            dept = cells[2].get_text(strip=True)
+            date = cells[3].get_text(strip=True)
 
             link = title_cell.select_one("a")
             if not link:
                 continue
 
             title = link.get_text(strip=True)
+
+            # href는 javascript:fn_goLinkView('45528', 'A') 형식
             href = link.get("href", "")
-            if href.startswith("./"):
-                detail_url = f"{BASE_URL}/www/brd/m_438/{href[2:]}"
-            elif href.startswith("/"):
-                detail_url = f"{BASE_URL}{href}"
+            m = re.search(r"fn_goLinkView\('(\d+)',\s*'([^']+)'\)", href)
+            if m:
+                sno = m.group(1)
+                gosi_gbn = m.group(2)
+                detail_url = (
+                    f"{BASE_URL}/index.do?menu_id=00940170"
+                    f"&menu_link=/front/daeguSidoGosi/daeguSidoGosiView.do"
+                    f"&sno={sno}&gosi_gbn={gosi_gbn}"
+                )
             else:
-                detail_url = href
+                detail_url = f"{BASE_URL}/index.do?menu_id=00940170"
 
             items.append({
                 "number": number,
                 "title": title,
                 "date": date,
                 "url": detail_url,
-                "organization": "용인도시공사",
+                "organization": dept if dept else "대구광역시청",
             })
 
         return items, total_count
@@ -116,18 +140,18 @@ class YUCCrawler:
                 all_items.extend(page_results[p])
 
         all_items.sort(key=lambda x: x["date"], reverse=True)
-        print(f"[용인도시공사] 완료: 총 {len(all_items)}건")
+        print(f"[대구광역시청] 완료: 총 {len(all_items)}건")
         return all_items
 
 
 if __name__ == "__main__":
-    crawler = YUCCrawler()
+    crawler = DaeguCrawler()
     print("=== 전체 조회 (3페이지) ===")
     results = crawler.search("", max_pages=3)
     for r in results[:5]:
-        print(f"  [{r['date']}] {r['title'][:50]}")
+        print(f"  [{r['date']}] {r['title'][:50]} | {r['organization']}")
 
-    print("\n=== '공고' 검색 (3페이지) ===")
+    print("\n=== '공고' 검색 ===")
     results2 = crawler.search("공고", max_pages=3)
     for r in results2[:5]:
         print(f"  [{r['date']}] {r['title'][:50]}")

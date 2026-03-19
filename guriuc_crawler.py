@@ -100,7 +100,7 @@ class GURIUCCrawler:
 
         return items, total_count
 
-    WORKERS = 5
+    WORKERS = 20
 
     def search(self, keyword="", max_pages=10):
         """입찰정보를 검색합니다."""

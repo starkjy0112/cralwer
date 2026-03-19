@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 BASE_URL = "https://www.best.or.kr"
 BOARD_PATH = "/fmcs/156"
-PAGE_SIZE = 10
+PAGE_SIZE = 100
 
 
 class BESTCrawler:
@@ -83,7 +83,7 @@ class BESTCrawler:
 
         return items, total_count
 
-    WORKERS = 5
+    WORKERS = 20
 
     def search(self, keyword="", max_pages=10):
         first_items, total_count = self._fetch_page(keyword, 1)

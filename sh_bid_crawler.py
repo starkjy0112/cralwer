@@ -16,6 +16,9 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
+PAGE_SIZE = 100
+
+
 class SHBidCrawler:
     """Crawler for SH서울주택도시공사 입찰공고."""
 
@@ -87,7 +90,7 @@ class SHBidCrawler:
             "srchFr": srch_fr,
             "srchTo": srch_to,
             "bidNtceNm": keyword,
-            "pitem": "10",
+            "pitem": str(PAGE_SIZE),
             "reqPage": str(page) if page > 1 else "",
         }
         try:

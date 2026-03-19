@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 BASE_URL = "https://www.gcuc.or.kr"
 BOARD_PATH = "/fmcs/722"
+PAGE_SIZE = 100
 
 
 class GCUCCrawler:
@@ -31,7 +32,7 @@ class GCUCCrawler:
         """게시판 목록 한 페이지를 가져옵니다."""
         params = {
             "page": page,
-            "page_size": 10,
+            "page_size": PAGE_SIZE,
             "search_field": "Ti",  # 제목 검색
             "search_word": keyword,
         }
@@ -49,7 +50,7 @@ class GCUCCrawler:
         match = re.search(r'(\d+)건', text)
         if match:
             total_count = int(match.group(1))
-            total_pages = max(1, math.ceil(total_count / 10))
+            total_pages = max(1, math.ceil(total_count / PAGE_SIZE))
 
         # 게시글 파싱
         items = []
@@ -86,7 +87,7 @@ class GCUCCrawler:
 
         return items, total_pages
 
-    WORKERS = 5
+    WORKERS = 20
 
     def search(self, keyword="", max_pages=10):
         """개발사업 게시글을 검색합니다."""

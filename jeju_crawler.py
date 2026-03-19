@@ -1,25 +1,21 @@
 # -*- coding: utf-8 -*-
 """
-인천도시공사 게시물 검색 크롤러
-https://www.ih.co.kr/search/searchBbs.do?query=
-GET 기반, 10건/페이지, pgno 파라미터
+제주특별자치도청 입법고시공고 크롤러
+https://www.jeju.go.kr/news/news/law/jeju2.htm
+JSON API 기반 (/tool/sido/api.jsp), 10건/페이지
 """
 import math
-import re
 import requests
-from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
-BASE_URL = "https://www.ih.co.kr"
-SEARCH_URL = f"{BASE_URL}/search/searchBbs.do"
+BASE_URL = "https://www.jeju.go.kr"
+API_URL = f"{BASE_URL}/tool/sido/api.jsp"
 PAGE_SIZE = 10
 
 
-class IHCrawler:
-    """인천도시공사 게시물 검색 크롤러"""
-
-    WORKERS = 20
+class JejuCrawler:
+    """제주특별자치도청 입법고시공고 크롤러"""
 
     def __init__(self):
         self.session = requests.Session()
@@ -33,58 +29,50 @@ class IHCrawler:
 
     def _fetch_page(self, keyword, page):
         params = {
-            "query": keyword,
-            "pgno": page,
+            "act": "index",
+            "page": page,
         }
-        resp = self.session.get(SEARCH_URL, params=params, timeout=15)
-        resp.encoding = "utf-8"
-        soup = BeautifulSoup(resp.text, "html.parser")
+        if keyword:
+            params["conTitle"] = keyword
 
+        resp = self.session.get(API_URL, params=params, timeout=15)
+        resp.encoding = "utf-8"
+        data = resp.json()
+
+        if data.get("error"):
+            return [], 0
+
+        # 총 건수: query.rows
         total_count = 0
-        m = re.search(r'(\d[\d,]*)\s*건', soup.get_text())
-        if m:
-            total_count = int(m.group(1).replace(",", ""))
+        query = data.get("query", {})
+        if query.get("rows"):
+            total_count = int(query["rows"])
 
         items = []
-        for dl in soup.find_all("dl"):
-            dt = dl.find("dt")
-            if not dt:
-                continue
+        gosis = data.get("gosis", [])
+        for g in gosis:
+            gosi_no = g.get("gosiNo", "")
+            title = g.get("title", "")
+            date = g.get("date", "")
+            no = g.get("no", "")
+            dept = g.get("dept", "")
 
-            link = dt.find("a")
-            if not link:
-                continue
-
-            title = link.get_text(strip=True)
-            if not title:
-                continue
-
-            href = link.get("href", "")
-            detail_url = f"{BASE_URL}{href}" if href.startswith("/") else href
-
-            date = ""
-            dds = dl.find_all("dd")
-            for dd in dds:
-                m2 = re.search(r'(\d{4}[-./]\d{1,2}[-./]\d{1,2})', dd.get_text())
-                if m2:
-                    date = m2.group(1)
-                    break
+            # 상세 URL 구성
+            detail_url = f"{BASE_URL}/news/news/law/jeju2.htm?act=view&no={no}"
 
             items.append({
-                "number": "",
+                "number": gosi_no,
                 "title": title,
                 "date": date,
                 "url": detail_url,
-                "organization": "인천도시공사",
+                "organization": dept if dept else "제주특별자치도청",
             })
 
         return items, total_count
 
-    def search(self, keyword="", max_pages=10):
-        if not keyword:
-            print("[인천도시공사] 통합검색은 키워드가 필요합니다")
-            return []
+    WORKERS = 20
 
+    def search(self, keyword="", max_pages=10):
         first_items, total_count = self._fetch_page(keyword, 1)
         total_pages = max(1, math.ceil(total_count / PAGE_SIZE))
         actual_pages = min(total_pages, max_pages)
@@ -113,13 +101,18 @@ class IHCrawler:
                 all_items.extend(page_results[p])
 
         all_items.sort(key=lambda x: x["date"], reverse=True)
-        print(f"[인천도시공사] 완료: 총 {len(all_items)}건")
+        print(f"[제주특별자치도청] 완료: 총 {len(all_items)}건")
         return all_items
 
 
 if __name__ == "__main__":
-    crawler = IHCrawler()
-    print("=== '공고' 검색 ===")
-    results = crawler.search("공고", max_pages=3)
+    crawler = JejuCrawler()
+    print("=== 전체 조회 (3페이지) ===")
+    results = crawler.search("", max_pages=3)
     for r in results[:5]:
+        print(f"  [{r['date']}] {r['title'][:50]} | {r['organization']}")
+
+    print("\n=== '공고' 검색 ===")
+    results2 = crawler.search("공고", max_pages=3)
+    for r in results2[:5]:
         print(f"  [{r['date']}] {r['title'][:50]}")

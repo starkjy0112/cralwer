@@ -13,13 +13,13 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 BASE_URL = "https://www.puc.or.kr"
 LIST_URL = f"{BASE_URL}/noticeInfo/noticeInfoList.do"
-PAGE_SIZE = 10
+PAGE_SIZE = 100
 
 
 class PUCCrawler:
     """평택도시공사 입찰정보 크롤러"""
 
-    WORKERS = 5
+    WORKERS = 20
 
     def __init__(self):
         self.session = requests.Session()

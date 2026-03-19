@@ -19,7 +19,7 @@ class ISDCNoticeCrawler:
     LIST_URL = f"{BASE_URL}/board/default/boardDefaultList.asp"
     DETAIL_URL = f"{BASE_URL}/board/default/boardDefaultview.asp"
     BBS_NO = "82"
-    WORKERS = 5
+    WORKERS = 20
 
     def __init__(self):
         self.session = requests.Session()

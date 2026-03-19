@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 BASE_URL = "https://www.gunpouc.or.kr"
 BOARD_PATH = "/fmcs/90"
-PAGE_SIZE = 20
+PAGE_SIZE = 100
 
 
 class GUNPOUCCrawler:
@@ -85,7 +85,7 @@ class GUNPOUCCrawler:
 
         return items, total_count
 
-    WORKERS = 5
+    WORKERS = 20
 
     def search(self, keyword="", max_pages=10):
         """입찰공고를 검색합니다."""

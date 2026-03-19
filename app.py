@@ -80,6 +80,33 @@ from huic_crawler import HUICCrawler
 from hu_crawler import HUCrawler
 from cuc_bid_crawler import CUCBidCrawler
 from hu_notice_crawler import HUNoticeCrawler
+from seoul_bid_crawler import SeoulBidCrawler
+from seoul_cis_crawler import SeoulCISCrawler
+from seoul_contract_crawler import SeoulContractCrawler
+from gwangju_crawler import GwangjuCrawler
+from daegu_crawler import DaeguCrawler
+from daejeon_gosi_crawler import DaejeonGosiCrawler
+from daejeon_all_crawler import DaejeonAllCrawler
+from busan_notice_crawler import BusanNoticeCrawler
+from busan_gosi_crawler import BusanGosiCrawler
+from ulsan_crawler import UlsanCrawler
+from incheon_crawler import IncheonCrawler
+from gangwon_crawler import GangwonCrawler
+from sejong_bid_crawler import SejongBidCrawler
+from sejong_general_crawler import SejongGeneralCrawler
+from sejong_notice_crawler import SejongNoticeCrawler
+from jeonbuk_crawler import JeonbukCrawler
+from jeonbuk_other_crawler import JeonbukOtherCrawler
+from jeju_crawler import JejuCrawler
+from gg_crawler import GGCrawler
+from gsnd_notice_crawler import GSNDNoticeCrawler
+from gsnd_gosi_crawler import GSNDGosiCrawler
+from gb_notice_crawler import GBNoticeCrawler
+from gb_gosi_crawler import GBGosiCrawler
+from jeonnam_crawler import JeonnamNotCrawler
+from jeonnam_bid_crawler import JeonnamBidCrawler
+from chungnam_crawler import ChungnamCrawler
+from chungbuk_crawler import ChungbukCrawler
 
 app = Flask(__name__)
 
@@ -415,6 +442,168 @@ CRAWLERS = {
         "instance": HUNoticeCrawler(),
         "url": "https://www.hu.or.kr"
     },
+    "seoul_bid": {
+        "name": "서울특별시청",
+        "type": "입찰공고",
+        "instance": SeoulBidCrawler(),
+        "url": "https://www.seoul.go.kr"
+    },
+    "seoul_cis": {
+        "name": "서울특별시청",
+        "type": "공지사항",
+        "instance": SeoulCISCrawler(),
+        "url": "https://cis.seoul.go.kr"
+    },
+    "seoul_contract": {
+        "name": "서울계약마당",
+        "type": "입찰공고",
+        "instance": SeoulContractCrawler(),
+        "url": "https://contract.seoul.go.kr"
+    },
+    "gwangju": {
+        "name": "광주광역시청",
+        "type": "고시공고",
+        "instance": GwangjuCrawler(),
+        "url": "https://www.gwangju.go.kr"
+    },
+    "daegu": {
+        "name": "대구광역시청",
+        "type": "고시공고",
+        "instance": DaeguCrawler(),
+        "url": "https://www.daegu.go.kr"
+    },
+    "daejeon_gosi": {
+        "name": "대전광역시청",
+        "type": "공고",
+        "instance": DaejeonGosiCrawler(),
+        "url": "https://www.daejeon.go.kr"
+    },
+    "daejeon_all": {
+        "name": "대전광역시청",
+        "type": "소식모아보기",
+        "instance": DaejeonAllCrawler(),
+        "url": "https://www.daejeon.go.kr"
+    },
+    "busan_notice": {
+        "name": "부산광역시청",
+        "type": "통합공지사항",
+        "instance": BusanNoticeCrawler(),
+        "url": "https://www.busan.go.kr"
+    },
+    "busan_gosi": {
+        "name": "부산광역시청",
+        "type": "고시공고",
+        "instance": BusanGosiCrawler(),
+        "url": "https://www.busan.go.kr"
+    },
+    "ulsan_city": {
+        "name": "울산광역시청",
+        "type": "고시공고",
+        "instance": UlsanCrawler(),
+        "url": "https://www.ulsan.go.kr"
+    },
+    "incheon": {
+        "name": "인천광역시청",
+        "type": "고시공고",
+        "instance": IncheonCrawler(),
+        "url": "http://announce.incheon.go.kr"
+    },
+    "gangwon": {
+        "name": "강원특별자치도청",
+        "type": "공고/고시",
+        "instance": GangwonCrawler(),
+        "url": "https://state.gwd.go.kr"
+    },
+    "sejong_bid": {
+        "name": "세종특별자치시청",
+        "type": "입찰공고",
+        "instance": SejongBidCrawler(),
+        "url": "https://www.sejong.go.kr"
+    },
+    "sejong_general": {
+        "name": "세종특별자치시청",
+        "type": "일반공고",
+        "instance": SejongGeneralCrawler(),
+        "url": "https://www.sejong.go.kr"
+    },
+    "sejong_notice": {
+        "name": "세종특별자치시청",
+        "type": "공지사항",
+        "instance": SejongNoticeCrawler(),
+        "url": "https://www.sejong.go.kr"
+    },
+    "jeonbuk": {
+        "name": "전북특별자치도청",
+        "type": "전북공고",
+        "instance": JeonbukCrawler(),
+        "url": "https://www.jeonbuk.go.kr"
+    },
+    "jeonbuk_other": {
+        "name": "전북특별자치도청",
+        "type": "타기관공고",
+        "instance": JeonbukOtherCrawler(),
+        "url": "https://www.jeonbuk.go.kr"
+    },
+    "jeju": {
+        "name": "제주특별자치도청",
+        "type": "입법고시공고",
+        "instance": JejuCrawler(),
+        "url": "https://www.jeju.go.kr"
+    },
+    "gg": {
+        "name": "경기도청",
+        "type": "고시공고",
+        "instance": GGCrawler(),
+        "url": "https://www.gg.go.kr"
+    },
+    "gsnd_notice": {
+        "name": "경상남도청",
+        "type": "공지사항",
+        "instance": GSNDNoticeCrawler(),
+        "url": "https://www.gyeongnam.go.kr"
+    },
+    "gsnd_gosi": {
+        "name": "경상남도청",
+        "type": "고시공고",
+        "instance": GSNDGosiCrawler(),
+        "url": "https://www.gyeongnam.go.kr"
+    },
+    "gb_notice": {
+        "name": "경상북도청",
+        "type": "알림마당",
+        "instance": GBNoticeCrawler(),
+        "url": "https://www.gb.go.kr"
+    },
+    "gb_gosi": {
+        "name": "경상북도청",
+        "type": "고시공고",
+        "instance": GBGosiCrawler(),
+        "url": "https://www.gb.go.kr"
+    },
+    "jeonnam_notice": {
+        "name": "전라남도청",
+        "type": "고시/공고",
+        "instance": JeonnamNotCrawler(),
+        "url": "https://www.jeonnam.go.kr"
+    },
+    "jeonnam_bid": {
+        "name": "전라남도청",
+        "type": "입찰공고",
+        "instance": JeonnamBidCrawler(),
+        "url": "https://gyeyak.jeonnam.go.kr"
+    },
+    "chungnam": {
+        "name": "충청남도청",
+        "type": "공고고시",
+        "instance": ChungnamCrawler(),
+        "url": "https://www.chungnam.go.kr"
+    },
+    "chungbuk": {
+        "name": "충청북도청",
+        "type": "고시/공고",
+        "instance": ChungbukCrawler(),
+        "url": "https://www.chungbuk.go.kr"
+    },
 }
 
 # 캐시 저장소
@@ -477,14 +666,20 @@ def search(crawler_id):
     try:
         crawler = CRAWLERS[crawler_id]["instance"]
         # 날짜 파라미터를 직접 지원하는 크롤러
-        if crawler_id in ("nara", "sh_bid") and start_date and end_date:
+        DATE_SUPPORTED = (
+            "nara", "sh_bid",
+            "busan_gosi", "busan_notice", "daejeon_gosi", "gangwon",
+            "chungnam", "gb_notice", "gb_gosi",
+            "gwangju", "incheon", "seoul_cis",
+        )
+        if crawler_id in DATE_SUPPORTED and start_date and end_date:
             results = crawler.search(keyword, max_pages=max_pages,
                                     start_date=start_date, end_date=end_date)
         else:
             results = crawler.search(keyword, max_pages=max_pages)
 
         # 다른 크롤러는 결과에서 날짜 필터링
-        if crawler_id != "nara" and start_date and end_date:
+        if crawler_id not in DATE_SUPPORTED and start_date and end_date:
             filtered = []
             for r in results:
                 date = r.get("date", "")

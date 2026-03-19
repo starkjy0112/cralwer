@@ -95,7 +95,7 @@ class CNDCCrawler:
 
         return items, total_pages
 
-    WORKERS = 5
+    WORKERS = 20
 
     def search(self, keyword="", max_pages=10):
         """입찰공고를 검색합니다."""
