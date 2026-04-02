@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 BASE_URL = "https://www.ui4u.go.kr"
 LIST_URL = f"{BASE_URL}/portal/saeol/gosiList.do"
-PAGE_SIZE = 10
+PAGE_SIZE = 100
 
 
 class UijeongbuBidCrawler:
@@ -44,7 +44,7 @@ class UijeongbuBidCrawler:
             params["searchType"] = "NOT_ANCMT_SJ"
             params["searchTxt"] = keyword
 
-        resp = self.session.get(LIST_URL, params=params, timeout=15)
+        resp = self.session.post(LIST_URL, data=params, timeout=15)
         resp.encoding = "utf-8"
         html = resp.text
         soup = BeautifulSoup(html, "lxml")

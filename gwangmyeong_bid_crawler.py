@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 BASE_URL = "https://www.gm.go.kr"
 LIST_URL = f"{BASE_URL}/pt/user/nftcBbs/BD_selectNftcBbsList.do"
 DETAIL_URL = f"{BASE_URL}/pt/user/nftcBbs/BD_selectNftcBbsDetail.do"
-PAGE_SIZE = 10
+PAGE_SIZE = 100
 ORGANIZATION_NAME = "광명시청"
 
 
@@ -40,6 +40,7 @@ class GwangmyeongBidCrawler:
         params = {
             "q_nftcBbsCode": "1003",
             "q_currPage": str(page),
+            "q_rowPerPage": str(PAGE_SIZE),
         }
         if keyword:
             params["q_searchKeyTy"] = "1001"
