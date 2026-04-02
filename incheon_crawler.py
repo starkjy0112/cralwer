@@ -10,6 +10,7 @@ import math
 import re
 import urllib.parse
 import requests
+from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -31,6 +32,9 @@ class IncheonCrawler:
                 "Chrome/120.0.0.0 Safari/537.36"
             ),
         })
+        adapter = HTTPAdapter(pool_connections=1, pool_maxsize=20)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
         self.session.verify = False
 
     def _fetch_page(self, keyword, page, start_date=None, end_date=None):
@@ -75,7 +79,7 @@ class IncheonCrawler:
             timeout=15,
         )
         text = resp.content.decode("utf-8", errors="replace")
-        soup = BeautifulSoup(text, "html.parser")
+        soup = BeautifulSoup(text, "lxml")
 
         # 총 건수: "1/375 (총 3744건)" 패턴
         total_count = 0

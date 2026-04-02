@@ -4,6 +4,7 @@
 공공데이터포털 Open API 사용
 """
 import requests
+from requests.adapters import HTTPAdapter
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 

@@ -7,6 +7,7 @@ GET 기반, 게시판 검색 (게시판별 페이지네이션 + URL 중복제거
 
 import re
 import requests
+from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -81,7 +82,7 @@ class YJUCCrawler:
         }
         resp = self.session.get(SEARCH_URL, params=params, timeout=15)
         resp.encoding = "euc-kr"
-        soup = BeautifulSoup(resp.text, "html.parser")
+        soup = BeautifulSoup(resp.text, "lxml")
         return self._parse_items(soup)
 
     def _get_boards_and_max_pages(self, keyword):
@@ -94,7 +95,7 @@ class YJUCCrawler:
         }
         resp = self.session.get(SEARCH_URL, params=params, timeout=15)
         resp.encoding = "euc-kr"
-        soup = BeautifulSoup(resp.text, "html.parser")
+        soup = BeautifulSoup(resp.text, "lxml")
 
         # 첫 페이지 결과
         first_items = self._parse_items(soup)

@@ -108,6 +108,62 @@ from jeonnam_bid_crawler import JeonnamBidCrawler
 from chungnam_crawler import ChungnamCrawler
 from chungbuk_crawler import ChungbukCrawler
 
+# 경기도 시군 크롤러 (79-132)
+from gapyeong_notice_crawler import GapyeongNoticeCrawler
+from gapyeong_gosi_crawler import GapyeongGosiCrawler
+from gwacheon_bid_crawler import GwacheonBidCrawler
+from gwacheon_gosi_crawler import GwacheonGosiCrawler
+from gwangmyeong_bid_crawler import GwangmyeongBidCrawler
+from gwangmyeong_gosi_crawler import GwangmyeongGosiCrawler
+from gjcity_gosi_crawler import GjcityGosiCrawler
+from gjcity_bid_crawler import GjcityBidCrawler
+from guri_notice_crawler import GuriNoticeCrawler
+from guri_bid_crawler import GuriBidCrawler
+from gunpo_gosi_crawler import GunpoGosiCrawler
+from gunpo_bid_crawler import GunpoBidCrawler
+from goyang_bid_crawler import GoyangBidCrawler
+from gimpo_gosi_crawler import GimpoGosiCrawler
+from gimpo_bid_crawler import GimpoBidCrawler
+from namyangju_crawler import NamyangjuCrawler
+from dongducheon_gosi_crawler import DongducheonGosiCrawler
+from dongducheon_bid_crawler import DongducheonBidCrawler
+from bucheon_bid_crawler import BucheonBidCrawler
+from seongnam_bid_crawler import SeongnamBidCrawler
+from suwon_crawler import SuwonCrawler
+from siheung_bid_crawler import SiheungBidCrawler
+from siheung_gosi_crawler import SiheungGosiCrawler
+from ansan_gosi_crawler import AnsanGosiCrawler
+from ansan_bid_crawler import AnsanBidCrawler
+from anseong_bid_crawler import AnseongBidCrawler
+from anseong_gosi_crawler import AnseongGosiCrawler
+from anyang_bid_crawler import AnyangBidCrawler
+from anyang_gosi_crawler import AnyangGosiCrawler
+from yangju_bid_crawler import YangjuBidCrawler
+from yangju_notice_crawler import YangjuNoticeCrawler
+from yangpyeong_crawler import YangpyeongCrawler
+from yeoju_gosi_crawler import YeojuGosiCrawler
+from yeoju_bid_crawler import YeojuBidCrawler
+from yeoncheon_crawler import YeoncheonCrawler
+from osan_bid_crawler import OsanBidCrawler
+from osan_gosi_crawler import OsanGosiCrawler
+from yongin_committee_crawler import YonginCommitteeCrawler
+from yongin_bid_crawler import YonginBidCrawler
+from icheon_bid_crawler import IcheonBidCrawler
+from icheon_gosi_crawler import IcheonGosiCrawler
+from uiwang_bid_crawler import UiwangBidCrawler
+from uiwang_gosi_crawler import UiwangGosiCrawler
+from uijeongbu_gosi_crawler import UijeongbuGosiCrawler
+from uijeongbu_bid_crawler import UijeongbuBidCrawler
+from paju_crawler import PajuCrawler
+from pyeongtaek_gosi_crawler import PyeongtaekGosiCrawler
+from pyeongtaek_bid_crawler import PyeongtaekBidCrawler
+from pocheon_bid_crawler import PocheonBidCrawler
+from pocheon_gosi_crawler import PocheonGosiCrawler
+from hanam_gosi_crawler import HanamGosiCrawler
+from hanam_bid_crawler import HanamBidCrawler
+from hwaseong_gosi_crawler import HwaseongGosiCrawler
+from hwaseong_bid_crawler import HwaseongBidCrawler
+
 app = Flask(__name__)
 
 
@@ -604,6 +660,331 @@ CRAWLERS = {
         "instance": ChungbukCrawler(),
         "url": "https://www.chungbuk.go.kr"
     },
+    # 경기도 시군 (79-132)
+    "gapyeong_notice": {
+        "name": "가평군청",
+        "type": "공지사항",
+        "instance": GapyeongNoticeCrawler(),
+        "url": "http://www.gp.go.kr"
+    },
+    "gapyeong_gosi": {
+        "name": "가평군청",
+        "type": "고시공고",
+        "instance": GapyeongGosiCrawler(),
+        "url": "http://www.gp.go.kr"
+    },
+    "gwacheon_bid": {
+        "name": "과천시청",
+        "type": "입찰공고",
+        "instance": GwacheonBidCrawler(),
+        "url": "https://www.gccity.go.kr"
+    },
+    "gwacheon_gosi": {
+        "name": "과천시청",
+        "type": "고시/공고",
+        "instance": GwacheonGosiCrawler(),
+        "url": "https://www.gccity.go.kr"
+    },
+    "gwangmyeong_bid": {
+        "name": "광명시청",
+        "type": "입찰공고",
+        "instance": GwangmyeongBidCrawler(),
+        "url": "https://www.gm.go.kr"
+    },
+    "gwangmyeong_gosi": {
+        "name": "광명시청",
+        "type": "고시공고",
+        "instance": GwangmyeongGosiCrawler(),
+        "url": "https://www.gm.go.kr"
+    },
+    "gjcity_gosi": {
+        "name": "광주시청",
+        "type": "고시공고",
+        "instance": GjcityGosiCrawler(),
+        "url": "https://www.gjcity.go.kr"
+    },
+    "gjcity_bid": {
+        "name": "광주시청",
+        "type": "입찰공고",
+        "instance": GjcityBidCrawler(),
+        "url": "https://www.gjcity.go.kr"
+    },
+    "guri_notice": {
+        "name": "구리시청",
+        "type": "공지사항",
+        "instance": GuriNoticeCrawler(),
+        "url": "https://www.guri.go.kr"
+    },
+    "guri_bid": {
+        "name": "구리시청",
+        "type": "입찰공고",
+        "instance": GuriBidCrawler(),
+        "url": "https://www.guri.go.kr"
+    },
+    "gunpo_gosi": {
+        "name": "군포시청",
+        "type": "고시공고",
+        "instance": GunpoGosiCrawler(),
+        "url": "https://www.gunpo.go.kr"
+    },
+    "gunpo_bid": {
+        "name": "군포시청",
+        "type": "입찰공고",
+        "instance": GunpoBidCrawler(),
+        "url": "https://www.gunpo.go.kr"
+    },
+    "goyang_bid": {
+        "name": "고양특례시청",
+        "type": "입찰공고",
+        "instance": GoyangBidCrawler(),
+        "url": "https://www.goyang.go.kr"
+    },
+    "gimpo_gosi": {
+        "name": "김포시청",
+        "type": "고시공고",
+        "instance": GimpoGosiCrawler(),
+        "url": "https://www.gimpo.go.kr"
+    },
+    "gimpo_bid": {
+        "name": "김포시청",
+        "type": "입찰공고",
+        "instance": GimpoBidCrawler(),
+        "url": "https://www.gimpo.go.kr"
+    },
+    "namyangju": {
+        "name": "남양주시청",
+        "type": "고시공고",
+        "instance": NamyangjuCrawler(),
+        "url": "https://www.nyj.go.kr"
+    },
+    "dongducheon_gosi": {
+        "name": "동두천시청",
+        "type": "일반공고",
+        "instance": DongducheonGosiCrawler(),
+        "url": "https://www.ddc.go.kr"
+    },
+    "dongducheon_bid": {
+        "name": "동두천시청",
+        "type": "입찰공고",
+        "instance": DongducheonBidCrawler(),
+        "url": "https://www.ddc.go.kr"
+    },
+    "bucheon_bid": {
+        "name": "부천시청",
+        "type": "입찰공고",
+        "instance": BucheonBidCrawler(),
+        "url": "http://www.bucheon.go.kr"
+    },
+    "seongnam_bid": {
+        "name": "성남시청",
+        "type": "입찰공고",
+        "instance": SeongnamBidCrawler(),
+        "url": "https://www.seongnam.go.kr"
+    },
+    "suwon": {
+        "name": "수원특례시청",
+        "type": "공고/고시",
+        "instance": SuwonCrawler(),
+        "url": "https://www.suwon.go.kr"
+    },
+    "siheung_bid": {
+        "name": "시흥시청",
+        "type": "입찰정보",
+        "instance": SiheungBidCrawler(),
+        "url": "https://www.siheung.go.kr"
+    },
+    "siheung_gosi": {
+        "name": "시흥시청",
+        "type": "고시/공고",
+        "instance": SiheungGosiCrawler(),
+        "url": "https://www.siheung.go.kr"
+    },
+    "ansan_gosi": {
+        "name": "안산시청",
+        "type": "고시/공고",
+        "instance": AnsanGosiCrawler(),
+        "url": "https://www.ansan.go.kr"
+    },
+    "ansan_bid": {
+        "name": "안산시청",
+        "type": "입찰공고",
+        "instance": AnsanBidCrawler(),
+        "url": "https://www.ansan.go.kr"
+    },
+    "anseong_bid": {
+        "name": "안성시청",
+        "type": "입찰공고",
+        "instance": AnseongBidCrawler(),
+        "url": "https://www.anseong.go.kr"
+    },
+    "anseong_gosi": {
+        "name": "안성시청",
+        "type": "고시/공고",
+        "instance": AnseongGosiCrawler(),
+        "url": "https://www.anseong.go.kr"
+    },
+    "anyang_bid": {
+        "name": "안양시청",
+        "type": "입찰공고",
+        "instance": AnyangBidCrawler(),
+        "url": "https://www.anyang.go.kr"
+    },
+    "anyang_gosi": {
+        "name": "안양시청",
+        "type": "고시공고",
+        "instance": AnyangGosiCrawler(),
+        "url": "https://www.anyang.go.kr"
+    },
+    "yangju_bid": {
+        "name": "양주시청",
+        "type": "입찰공고",
+        "instance": YangjuBidCrawler(),
+        "url": "https://www.yangju.go.kr"
+    },
+    "yangju_notice": {
+        "name": "양주시청",
+        "type": "양주소식",
+        "instance": YangjuNoticeCrawler(),
+        "url": "https://www.yangju.go.kr"
+    },
+    "yangpyeong": {
+        "name": "양평군청",
+        "type": "고시/공고",
+        "instance": YangpyeongCrawler(),
+        "url": "https://www.yp21.go.kr"
+    },
+    "yeoju_gosi": {
+        "name": "여주시청",
+        "type": "고시/공고",
+        "instance": YeojuGosiCrawler(),
+        "url": "https://www.yeoju.go.kr"
+    },
+    "yeoju_bid": {
+        "name": "여주시청",
+        "type": "입찰정보",
+        "instance": YeojuBidCrawler(),
+        "url": "https://www.yeoju.go.kr"
+    },
+    "yeoncheon": {
+        "name": "연천군청",
+        "type": "고시/공고",
+        "instance": YeoncheonCrawler(),
+        "url": "https://www.yeoncheon.go.kr"
+    },
+    "osan_bid": {
+        "name": "오산시청",
+        "type": "입찰공고",
+        "instance": OsanBidCrawler(),
+        "url": "https://www.osan.go.kr"
+    },
+    "osan_gosi": {
+        "name": "오산시청",
+        "type": "고시/공고",
+        "instance": OsanGosiCrawler(),
+        "url": "https://www.osan.go.kr"
+    },
+    "yongin_committee": {
+        "name": "용인특례시청",
+        "type": "공법선정위원회",
+        "instance": YonginCommitteeCrawler(),
+        "url": "http://www.yongin.go.kr"
+    },
+    "yongin_bid": {
+        "name": "용인특례시청",
+        "type": "입찰공고",
+        "instance": YonginBidCrawler(),
+        "url": "http://www.yongin.go.kr"
+    },
+    "icheon_bid": {
+        "name": "이천시청",
+        "type": "입찰공고",
+        "instance": IcheonBidCrawler(),
+        "url": "https://www.icheon.go.kr"
+    },
+    "icheon_gosi": {
+        "name": "이천시청",
+        "type": "일반공고",
+        "instance": IcheonGosiCrawler(),
+        "url": "https://www.icheon.go.kr"
+    },
+    "uiwang_bid": {
+        "name": "의왕시청",
+        "type": "입찰정보",
+        "instance": UiwangBidCrawler(),
+        "url": "https://www.uiwang.go.kr"
+    },
+    "uiwang_gosi": {
+        "name": "의왕시청",
+        "type": "고시공고",
+        "instance": UiwangGosiCrawler(),
+        "url": "https://www.uiwang.go.kr"
+    },
+    "uijeongbu_gosi": {
+        "name": "의정부시청",
+        "type": "고시/공고",
+        "instance": UijeongbuGosiCrawler(),
+        "url": "https://www.ui4u.go.kr"
+    },
+    "uijeongbu_bid": {
+        "name": "의정부시청",
+        "type": "입찰정보",
+        "instance": UijeongbuBidCrawler(),
+        "url": "https://www.ui4u.go.kr"
+    },
+    "paju": {
+        "name": "파주시청",
+        "type": "고시공고",
+        "instance": PajuCrawler(),
+        "url": "https://www.paju.go.kr"
+    },
+    "pyeongtaek_gosi": {
+        "name": "평택시청",
+        "type": "고시공고",
+        "instance": PyeongtaekGosiCrawler(),
+        "url": "https://www.pyeongtaek.go.kr"
+    },
+    "pyeongtaek_bid": {
+        "name": "평택시청",
+        "type": "입찰공고",
+        "instance": PyeongtaekBidCrawler(),
+        "url": "https://www.pyeongtaek.go.kr"
+    },
+    "pocheon_bid": {
+        "name": "포천시청",
+        "type": "입찰공고",
+        "instance": PocheonBidCrawler(),
+        "url": "https://www.pocheon.go.kr"
+    },
+    "pocheon_gosi": {
+        "name": "포천시청",
+        "type": "고시공고",
+        "instance": PocheonGosiCrawler(),
+        "url": "https://www.pocheon.go.kr"
+    },
+    "hanam_gosi": {
+        "name": "하남시청",
+        "type": "고시공고",
+        "instance": HanamGosiCrawler(),
+        "url": "https://www.hanam.go.kr"
+    },
+    "hanam_bid": {
+        "name": "하남시청",
+        "type": "입찰공고",
+        "instance": HanamBidCrawler(),
+        "url": "https://www.hanam.go.kr"
+    },
+    "hwaseong_gosi": {
+        "name": "화성특례시청",
+        "type": "일반공고",
+        "instance": HwaseongGosiCrawler(),
+        "url": "https://www.hscity.go.kr"
+    },
+    "hwaseong_bid": {
+        "name": "화성특례시청",
+        "type": "입찰공고",
+        "instance": HwaseongBidCrawler(),
+        "url": "https://www.hscity.go.kr"
+    },
 }
 
 # 캐시 저장소
@@ -671,6 +1052,7 @@ def search(crawler_id):
             "busan_gosi", "busan_notice", "daejeon_gosi", "gangwon",
             "chungnam", "gb_notice", "gb_gosi",
             "gwangju", "incheon", "seoul_cis",
+            "paju",
         )
         if crawler_id in DATE_SUPPORTED and start_date and end_date:
             results = crawler.search(keyword, max_pages=max_pages,
@@ -770,7 +1152,7 @@ def search_all():
 
     # 멀티스레드로 병렬 검색
     import concurrent.futures
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(CRAWLERS)) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=40) as executor:
         futures = {
             executor.submit(search_crawler, cid, info): cid
             for cid, info in CRAWLERS.items()

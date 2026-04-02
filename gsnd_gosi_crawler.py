@@ -8,6 +8,7 @@ GET 기반 (index.gyeong), 10건/페이지
 import math
 import re
 import requests
+from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -30,6 +31,9 @@ class GSNDGosiCrawler:
                 "Chrome/120.0.0.0 Safari/537.36"
             ),
         })
+        adapter = HTTPAdapter(pool_connections=1, pool_maxsize=20)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
         # 초기 접속으로 세션/쿠키 확보
         self.session.get(f"{LIST_URL}?menuCd={MENU_CD}", timeout=15)
 
@@ -44,7 +48,7 @@ class GSNDGosiCrawler:
 
         resp = self.session.get(LIST_URL, params=params, timeout=15)
         resp.encoding = "utf-8"
-        soup = BeautifulSoup(resp.text, "html.parser")
+        soup = BeautifulSoup(resp.text, "lxml")
 
         # 총 건수: 검색건수 :<span class="count-1">510</span>건
         total_count = 0

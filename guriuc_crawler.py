@@ -7,6 +7,7 @@ POST 기반, jsessionid 필요
 import math
 import re
 import requests
+from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -27,6 +28,9 @@ class GURIUCCrawler:
                 "Chrome/120.0.0.0 Safari/537.36"
             ),
         })
+        adapter = HTTPAdapter(pool_connections=1, pool_maxsize=20)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
         self.session.verify = False
         self._post_url = LIST_URL
 
@@ -51,7 +55,7 @@ class GURIUCCrawler:
             timeout=15,
         )
         resp.encoding = "utf-8"
-        soup = BeautifulSoup(resp.text, "html.parser")
+        soup = BeautifulSoup(resp.text, "lxml")
 
         # 총 건수 파싱: <p class="total">전체 <span class="em on">161</span>건</p>
         total_count = 0

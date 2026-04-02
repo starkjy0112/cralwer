@@ -5,6 +5,7 @@ https://www.jpdc.co.kr/help/search.htm
 """
 import re
 import requests
+from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup, NavigableString
 
 
@@ -23,6 +24,9 @@ class JPDCCrawler:
                 "Chrome/120.0.0.0 Safari/537.36"
             ),
         })
+        adapter = HTTPAdapter(pool_connections=1, pool_maxsize=20)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
 
     def _fetch_page(self, keyword, page):
         """통합검색 게시물 결과 한 페이지를 가져옵니다."""
@@ -37,7 +41,7 @@ class JPDCCrawler:
             timeout=15,
         )
         response.encoding = "utf-8"
-        soup = BeautifulSoup(response.text, "html.parser")
+        soup = BeautifulSoup(response.text, "lxml")
 
         # 결과 파싱: p.text 안에 <a>(breadcrumb), 제목(text), <br>, 날짜(text) 순서
         items = []

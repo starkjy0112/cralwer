@@ -6,6 +6,7 @@ AJAX POST 기반 (/ajax/board/getList.do), 10건/페이지, offset 방식
 """
 import math
 import requests
+from requests.adapters import HTTPAdapter
 from urllib.parse import quote
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -28,6 +29,9 @@ class GGCrawler:
             ),
             "X-Requested-With": "XMLHttpRequest",
         })
+        adapter = HTTPAdapter(pool_connections=1, pool_maxsize=20)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
 
     def _fetch_page(self, keyword, page):
         offset = (page - 1) * PAGE_SIZE

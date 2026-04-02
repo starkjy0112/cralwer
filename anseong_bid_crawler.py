@@ -1,0 +1,143 @@
+# -*- coding: utf-8 -*-
+"""
+안성시청 입찰공고 크롤러
+https://www.anseong.go.kr/portal/saeol/gosiList.do?seCode=02&mId=0501060000
+POST 기반 (listForm), 10건/페이지
+"""
+import math
+import re
+import requests
+from requests.adapters import HTTPAdapter
+from bs4 import BeautifulSoup
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+
+BASE_URL = "https://www.anseong.go.kr"
+LIST_URL = f"{BASE_URL}/portal/saeol/gosiList.do?seCode=02&mId=0501060000"
+PAGE_SIZE = 10
+ORGANIZATION_NAME = "안성시청"
+
+
+class AnseongBidCrawler:
+    """안성시청 입찰공고 크롤러"""
+
+    def __init__(self):
+        self.session = requests.Session()
+        self.session.headers.update({
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            ),
+        })
+        adapter = HTTPAdapter(pool_connections=1, pool_maxsize=20)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
+
+    def _fetch_page(self, keyword, page):
+        data = {
+            "page": str(page),
+            "seCode": "02",
+        }
+        if keyword:
+            data["searchType"] = "NOT_ANCMT_SJ"
+            data["searchTxt"] = keyword
+
+        resp = self.session.post(LIST_URL, data=data, timeout=15)
+        resp.encoding = "utf-8"
+        soup = BeautifulSoup(resp.text, "lxml")
+
+        # Parse total pages from goPage() calls
+        total_count = 0
+        max_page = 1
+        for m_p in re.finditer(r"goPage\(\s*(\d+)\s*\)", resp.text):
+            p_num = int(m_p.group(1))
+            if p_num > max_page:
+                max_page = p_num
+        if max_page > 1:
+            total_count = max_page * PAGE_SIZE
+
+        items = []
+        table = soup.find("table", class_="tableSt_list")
+        if not table:
+            for t in soup.find_all("table"):
+                rows = t.find_all("tr")
+                if 5 < len(rows) < 25:
+                    table = t
+                    break
+
+        if table:
+            tbody = table.find("tbody")
+            rows = tbody.find_all("tr") if tbody else table.find_all("tr")[1:]
+            for tr in rows:
+                tds = tr.find_all("td")
+                if len(tds) < 4:
+                    continue
+                # 입찰공고번호, 제목, 담당부서, 등록일
+                number = tds[0].get_text(strip=True)
+                title_td = tds[1]
+                title_tag = title_td.find("a")
+                if not title_tag:
+                    continue
+                for ico in title_tag.find_all("span", class_="ico_new"):
+                    ico.decompose()
+                title = title_tag.get_text(strip=True)
+                onclick = title_tag.get("onclick", "")
+                m_id = re.search(r"boardView\(\s*'[^']*'\s*,\s*'(\d+)'\s*\)", onclick)
+                if m_id:
+                    detail_url = f"{BASE_URL}/portal/saeol/gosiView.do?notAncmtMgtNo={m_id.group(1)}&mId=0501060000"
+                else:
+                    detail_url = ""
+                date = tds[3].get_text(strip=True).replace(".", "-")
+
+                items.append({
+                    "number": number,
+                    "title": title,
+                    "date": date,
+                    "url": detail_url,
+                    "organization": ORGANIZATION_NAME,
+                })
+
+        return items, total_count
+
+    WORKERS = 20
+
+    def search(self, keyword="", max_pages=10):
+        first_items, total_count = self._fetch_page(keyword, 1)
+        total_pages = max(1, math.ceil(total_count / PAGE_SIZE))
+        actual_pages = min(total_pages, max_pages)
+        print(f"  [Page 1/{actual_pages}] {len(first_items)}건 수집 (전체 {total_count}건)")
+
+        if actual_pages <= 1:
+            all_items = first_items
+        else:
+            page_results = {1: first_items}
+            with ThreadPoolExecutor(max_workers=self.WORKERS) as executor:
+                futures = {
+                    executor.submit(self._fetch_page, keyword, p): p
+                    for p in range(2, actual_pages + 1)
+                }
+                for future in as_completed(futures):
+                    p = futures[future]
+                    try:
+                        items, _ = future.result()
+                        if items:
+                            page_results[p] = items
+                    except Exception:
+                        pass
+
+            all_items = []
+            for p in sorted(page_results.keys()):
+                all_items.extend(page_results[p])
+
+        all_items.sort(key=lambda x: x["date"], reverse=True)
+        print(f"[{ORGANIZATION_NAME}] 완료: 총 {len(all_items)}건")
+        return all_items
+
+
+if __name__ == "__main__":
+    crawler = AnseongBidCrawler()
+    print("=== '공고' 검색 ===")
+    results = crawler.search("공고", max_pages=1)
+    for r in results[:3]:
+        print(f"  [{r['date']}] {r['title'][:50]}")

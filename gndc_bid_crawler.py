@@ -4,6 +4,7 @@
 requests + API 방식
 """
 import requests
+from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
 
 
@@ -30,7 +31,7 @@ class GNDCBidCrawler:
         """세션 초기화 및 토큰 획득"""
         self.session = requests.Session()
         response = self.session.get(self.board_url, headers=self.headers, timeout=10)
-        soup = BeautifulSoup(response.text, "html.parser")
+        soup = BeautifulSoup(response.text, "lxml")
 
         form = soup.find("form", {"name": "search_form"})
         if form:

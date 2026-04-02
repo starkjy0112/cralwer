@@ -7,6 +7,7 @@ GET 기반
 import math
 import re
 import requests
+from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
 
 
@@ -27,6 +28,9 @@ class ANSANUCCrawler:
                 "Chrome/120.0.0.0 Safari/537.36"
             ),
         })
+        adapter = HTTPAdapter(pool_connections=1, pool_maxsize=20)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
 
     def _fetch_page(self, keyword, page):
         params = {"currentPageNo": page}
@@ -36,7 +40,7 @@ class ANSANUCCrawler:
 
         resp = self.session.get(LIST_URL, params=params, timeout=15)
         resp.encoding = "utf-8"
-        soup = BeautifulSoup(resp.text, "html.parser")
+        soup = BeautifulSoup(resp.text, "lxml")
 
         items = []
         table = soup.select_one("table")

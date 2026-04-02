@@ -7,6 +7,7 @@ POST 기반 게시판, 제목 검색, 페이지네이션 지원.
 
 import re
 import requests
+from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
 from typing import Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -30,6 +31,9 @@ class ISDCNoticeCrawler:
                 "Chrome/120.0.0.0 Safari/537.36"
             ),
         })
+        adapter = HTTPAdapter(pool_connections=1, pool_maxsize=20)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
         self.session.verify = False
 
     def _fetch_page(self, keyword: str, page: int) -> Optional[BeautifulSoup]:
@@ -45,7 +49,7 @@ class ISDCNoticeCrawler:
             resp = self.session.post(self.LIST_URL, data=data, timeout=30)
             resp.raise_for_status()
             resp.encoding = "utf-8"
-            return BeautifulSoup(resp.text, "html.parser")
+            return BeautifulSoup(resp.text, "lxml")
         except requests.RequestException as e:
             print(f"[ERROR] Page {page}: {e}")
             return None

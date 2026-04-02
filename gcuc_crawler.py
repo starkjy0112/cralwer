@@ -6,6 +6,7 @@ https://www.gcuc.or.kr/fmcs/722
 import math
 import re
 import requests
+from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -27,6 +28,9 @@ class GCUCCrawler:
                 "Chrome/120.0.0.0 Safari/537.36"
             ),
         })
+        adapter = HTTPAdapter(pool_connections=1, pool_maxsize=20)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
 
     def _fetch_page(self, keyword, page):
         """게시판 목록 한 페이지를 가져옵니다."""
@@ -42,7 +46,7 @@ class GCUCCrawler:
             timeout=15,
         )
         response.encoding = "utf-8"
-        soup = BeautifulSoup(response.text, "html.parser")
+        soup = BeautifulSoup(response.text, "lxml")
 
         # 총 게시물 수 파싱: "54건의 게시물이 등록되어 있습니다."
         total_pages = 1

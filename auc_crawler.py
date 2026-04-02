@@ -6,6 +6,7 @@ GET 기반, 게시판 검색
 """
 import re
 import requests
+from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
 
 
@@ -25,6 +26,9 @@ class AUCCrawler:
                 "Chrome/120.0.0.0 Safari/537.36"
             ),
         })
+        adapter = HTTPAdapter(pool_connections=1, pool_maxsize=20)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
 
     def _fetch_page(self, keyword, page):
         params = {
@@ -36,7 +40,7 @@ class AUCCrawler:
         }
         resp = self.session.get(SEARCH_URL, params=params, timeout=30)
         resp.encoding = "utf-8"
-        soup = BeautifulSoup(resp.text, "html.parser")
+        soup = BeautifulSoup(resp.text, "lxml")
 
         # 총 건수: 전체(N) 또는 총 N 건
         total_count = 0

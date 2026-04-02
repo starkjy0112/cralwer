@@ -7,6 +7,7 @@ GET 기반, 10건/페이지, Start 오프셋 방식
 import math
 import re
 import requests
+from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -28,6 +29,9 @@ class GBNoticeCrawler:
                 "Chrome/120.0.0.0 Safari/537.36"
             ),
         })
+        adapter = HTTPAdapter(pool_connections=1, pool_maxsize=20)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
 
     def _fetch_page(self, keyword, page, start_date=None, end_date=None):
         start = (page - 1) * PAGE_SIZE
@@ -54,7 +58,7 @@ class GBNoticeCrawler:
         resp = self.session.get(LIST_URL, params=params, timeout=15)
         resp.encoding = "utf-8"
         html = resp.text
-        soup = BeautifulSoup(html, "html.parser")
+        soup = BeautifulSoup(html, "lxml")
 
         # 총 건수: "총 게시물 25345건" (HTML 주석 내부에 있음)
         total_count = 0

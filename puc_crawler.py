@@ -7,6 +7,7 @@ POST 기반, t_type=t_4 (입찰정보), 10건/페이지
 import math
 import re
 import requests
+from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -30,6 +31,9 @@ class PUCCrawler:
                 "Chrome/120.0.0.0 Safari/537.36"
             ),
         })
+        adapter = HTTPAdapter(pool_connections=1, pool_maxsize=20)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
 
     def _fetch_page(self, keyword, page):
         data = {
@@ -43,7 +47,7 @@ class PUCCrawler:
 
         resp = self.session.post(LIST_URL, data=data, timeout=15)
         resp.encoding = "utf-8"
-        soup = BeautifulSoup(resp.text, "html.parser")
+        soup = BeautifulSoup(resp.text, "lxml")
 
         total_count = 0
         tr_input = soup.select_one("input[name=TotalRecord]")

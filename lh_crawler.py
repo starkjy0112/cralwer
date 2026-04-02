@@ -37,7 +37,7 @@ class LHCrawler:
     def _parse_page(self, html: str):
         """HTML 파싱하여 데이터 추출"""
         results = []
-        soup = BeautifulSoup(html, "html.parser")
+        soup = BeautifulSoup(html, "lxml")
 
         tables = soup.find_all("table")
         if len(tables) < 2:

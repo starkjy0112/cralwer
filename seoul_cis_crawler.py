@@ -7,6 +7,7 @@ GET 기반, 10건/페이지, Struts .action 엔드포인트
 import math
 import re
 import requests
+from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -28,6 +29,9 @@ class SeoulCISCrawler:
                 "Chrome/120.0.0.0 Safari/537.36"
             ),
         })
+        adapter = HTTPAdapter(pool_connections=1, pool_maxsize=20)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
 
     def _fetch_page(self, keyword, page, start_date=None, end_date=None):
         params = {
@@ -43,7 +47,7 @@ class SeoulCISCrawler:
 
         resp = self.session.get(LIST_URL, params=params, timeout=15)
         resp.encoding = "utf-8"
-        soup = BeautifulSoup(resp.text, "html.parser")
+        soup = BeautifulSoup(resp.text, "lxml")
 
         # 총 건수: 첫 번째 row의 번호가 전체 건수 (내림차순 번호)
         total_count = 0

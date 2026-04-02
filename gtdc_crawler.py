@@ -4,6 +4,7 @@
 GET 요청 + HTML 파싱 방식
 """
 import requests
+from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
 
 
@@ -32,7 +33,7 @@ class GTDCCrawler:
     def _parse_page(self, html: str):
         """HTML 파싱"""
         results = []
-        soup = BeautifulSoup(html, "html.parser")
+        soup = BeautifulSoup(html, "lxml")
 
         tables = soup.find_all("table")
         if not tables:

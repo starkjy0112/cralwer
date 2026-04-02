@@ -5,6 +5,7 @@ https://www.gumc.or.kr/information/search
 """
 import re
 import requests
+from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -26,6 +27,9 @@ class GUMCCrawler:
                 "Chrome/120.0.0.0 Safari/537.36"
             ),
         })
+        adapter = HTTPAdapter(pool_connections=1, pool_maxsize=20)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
         self.session.verify = False
 
     def _fetch_search(self, keyword):
@@ -36,7 +40,7 @@ class GUMCCrawler:
             timeout=30,
         )
         resp.encoding = "utf-8"
-        soup = BeautifulSoup(resp.text, "html.parser")
+        soup = BeautifulSoup(resp.text, "lxml")
 
         items = []
         result_links = soup.select(".result-list ul li a")

@@ -9,6 +9,7 @@ import math
 import re
 import subprocess
 import requests
+from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -32,6 +33,9 @@ class JeonnamBidCrawler:
             ),
             "Referer": "https://gyeyak.jeonnam.go.kr/bid",
         })
+        adapter = HTTPAdapter(pool_connections=1, pool_maxsize=20)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
         self.session.verify = False
 
     def _fetch_page_curl(self, keyword, page):
@@ -76,7 +80,7 @@ class JeonnamBidCrawler:
 
         # hanayo.net은 EUC-KR 인코딩
         text = raw.decode("euc-kr", errors="replace")
-        soup = BeautifulSoup(text, "html.parser")
+        soup = BeautifulSoup(text, "lxml")
 
         # 총 페이지 수: 마지막 페이지 링크에서 추출
         total_count = 0

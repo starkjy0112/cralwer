@@ -7,6 +7,7 @@ API: /getBbsArticleList.do (GET)
 """
 
 import requests
+from requests.adapters import HTTPAdapter
 
 
 class GBDCBidCrawler:

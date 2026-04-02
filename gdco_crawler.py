@@ -4,6 +4,7 @@
 GET 요청 + HTML 파싱 방식
 """
 import requests
+from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
 
 
@@ -35,7 +36,7 @@ class GDCOCrawler:
     def _parse_page(self, html: str):
         """HTML 파싱"""
         results = []
-        soup = BeautifulSoup(html, "html.parser")
+        soup = BeautifulSoup(html, "lxml")
 
         # 테이블 찾기 (테이블 0: 공지, 테이블 1: 일반 게시물)
         tables = soup.find_all("table")

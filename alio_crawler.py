@@ -7,6 +7,7 @@ import asyncio
 import aiohttp
 import time
 import requests
+from requests.adapters import HTTPAdapter
 from playwright.async_api import async_playwright
 
 # 전역 쿠키 캐시 (모든 인스턴스가 공유)

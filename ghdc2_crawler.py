@@ -5,6 +5,7 @@ POST 검색 + HTML 테이블 파싱 방식
 """
 import re
 import requests
+from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
 
 
@@ -29,6 +30,9 @@ class GHDCOnbidBidCrawler:
             "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
             "Referer": f"{self.BASE_URL}/sub.html?code={self.BOARD_CODE}&Radd={self.BOARD_CODE}",
         })
+        adapter = HTTPAdapter(pool_connections=1, pool_maxsize=20)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
 
     def _build_list_url(self, page: int = 1, keyword: str = "", search_type: str = "B"):
         """게시판 목록 URL 생성"""
@@ -92,7 +96,7 @@ class GHDCOnbidBidCrawler:
     def _parse_page(self, html: str):
         """HTML 테이블 파싱하여 결과 리스트 반환"""
         results = []
-        soup = BeautifulSoup(html, "html.parser")
+        soup = BeautifulSoup(html, "lxml")
 
         bbs_div = soup.find("div", class_="bbsTable")
         if not bbs_div:

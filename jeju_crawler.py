@@ -6,6 +6,7 @@ JSON API 기반 (/tool/sido/api.jsp), 10건/페이지
 """
 import math
 import requests
+from requests.adapters import HTTPAdapter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
@@ -26,6 +27,9 @@ class JejuCrawler:
                 "Chrome/120.0.0.0 Safari/537.36"
             ),
         })
+        adapter = HTTPAdapter(pool_connections=1, pool_maxsize=20)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
 
     def _fetch_page(self, keyword, page):
         params = {

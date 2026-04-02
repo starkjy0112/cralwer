@@ -17,6 +17,7 @@ from __future__ import annotations
 import re
 import logging
 import requests
+from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, quote
 from typing import Optional, List, Dict
@@ -55,6 +56,9 @@ class JBDCCrawler:
             "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
             "Referer": BASE_URL,
         })
+        adapter = HTTPAdapter(pool_connections=1, pool_maxsize=20)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
 
     def _fetch_search_page(self, keyword: str) -> Optional[str]:
         """
@@ -109,7 +113,7 @@ class JBDCCrawler:
         Returns a list of dicts with keys:
             title, date, url, organization, number
         """
-        soup = BeautifulSoup(html, "html.parser")
+        soup = BeautifulSoup(html, "lxml")
         results: List[Dict] = []
 
         # Extract total count for logging
@@ -182,7 +186,7 @@ class JBDCCrawler:
         try:
             resp = self.session.get(url, timeout=15)
             resp.encoding = "utf-8"
-            soup = BeautifulSoup(resp.text, "html.parser")
+            soup = BeautifulSoup(resp.text, "lxml")
             for th in soup.select("th"):
                 if "등록일" in th.get_text(strip=True):
                     td = th.find_next_sibling("td")

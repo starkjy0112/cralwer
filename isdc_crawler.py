@@ -8,6 +8,7 @@ Target URL: https://www.isdc.co.kr/guidance/search.asp
 
 import re
 import requests
+from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
 from typing import Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -32,6 +33,9 @@ class ISDCCrawler:
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
         })
+        adapter = HTTPAdapter(pool_connections=1, pool_maxsize=20)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
         self.session.verify = False
 
     def _fetch_search_page(self, keyword: str) -> Optional[BeautifulSoup]:
@@ -45,7 +49,7 @@ class ISDCCrawler:
                 resp = self.session.get(self.SEARCH_URL, timeout=30)
             resp.raise_for_status()
             resp.encoding = "utf-8"
-            return BeautifulSoup(resp.text, "html.parser")
+            return BeautifulSoup(resp.text, "lxml")
         except requests.RequestException as e:
             print(f"[ERROR] Search failed: {e}")
             return None
@@ -122,7 +126,7 @@ class ISDCCrawler:
             resp = self.session.post(self.SEARCH_BBS_URL, data=data, timeout=30)
             resp.raise_for_status()
             resp.encoding = "utf-8"
-            return BeautifulSoup(resp.text, "html.parser")
+            return BeautifulSoup(resp.text, "lxml")
         except requests.RequestException as e:
             print(f"[ERROR] BbsNo={bbs_no} Page {page}: {e}")
             return None

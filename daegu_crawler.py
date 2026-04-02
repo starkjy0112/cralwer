@@ -7,6 +7,7 @@ POST 기반, 10건/페이지, pageIndex 방식
 import math
 import re
 import requests
+from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -28,6 +29,9 @@ class DaeguCrawler:
                 "Chrome/120.0.0.0 Safari/537.36"
             ),
         })
+        adapter = HTTPAdapter(pool_connections=1, pool_maxsize=20)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
 
     def _fetch_page(self, keyword, page):
         post_data = {
@@ -48,7 +52,7 @@ class DaeguCrawler:
 
         resp = self.session.post(LIST_URL, data=post_data, timeout=15)
         resp.encoding = "utf-8"
-        soup = BeautifulSoup(resp.text, "html.parser")
+        soup = BeautifulSoup(resp.text, "lxml")
 
         # 총 건수: pagination에서 마지막 페이지 번호로 추정
         total_count = 0

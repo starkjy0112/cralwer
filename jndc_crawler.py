@@ -15,6 +15,7 @@ Search mechanism:
 import re
 import logging
 import requests
+from requests.adapters import HTTPAdapter
 from typing import Optional
 from html import unescape
 from concurrent.futures import ThreadPoolExecutor, as_completed

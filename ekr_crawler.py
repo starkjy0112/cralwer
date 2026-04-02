@@ -8,6 +8,7 @@ import warnings
 from urllib.parse import urljoin, parse_qs, urlparse
 
 import requests
+from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -122,7 +123,7 @@ class EkrCrawler:
         resp.encoding = "utf-8"
         resp.raise_for_status()
 
-        soup = BeautifulSoup(resp.text, "html.parser")
+        soup = BeautifulSoup(resp.text, "lxml")
 
         items = self._parse_items(soup)
         total_pages = self._parse_total_pages(soup)

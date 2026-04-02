@@ -5,6 +5,7 @@ Target: https://www.sdco.or.kr/board.es?mid=a10601020000&bid=0007
 """
 
 import requests
+from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
 from typing import Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -28,6 +29,9 @@ class SDCOCrawler:
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
         })
+        adapter = HTTPAdapter(pool_connections=1, pool_maxsize=20)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
 
     def _get_total_pages(self, soup: BeautifulSoup) -> int:
         """Extract total page count from the page info section."""

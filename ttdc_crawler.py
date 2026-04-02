@@ -9,6 +9,7 @@ ASP.NET WebForms 기반 (VIEWSTATE + __doPostBack 방식).
 """
 import re
 import requests
+from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
 
 
@@ -28,6 +29,9 @@ class TTDCCrawler:
                 "Chrome/120.0.0.0 Safari/537.36"
             ),
         })
+        adapter = HTTPAdapter(pool_connections=1, pool_maxsize=20)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
 
     def _extract_asp_fields(self, soup):
         """VIEWSTATE 등 ASP.NET hidden 필드 추출"""
@@ -91,7 +95,7 @@ class TTDCCrawler:
         # 1단계: 초기 페이지 GET
         resp = self.session.get(BOARD_URL, timeout=15)
         resp.encoding = "utf-8"
-        soup = BeautifulSoup(resp.text, "html.parser")
+        soup = BeautifulSoup(resp.text, "lxml")
         asp_fields = self._extract_asp_fields(soup)
 
         # 2단계: 검색 POST (키워드가 있으면)
@@ -102,7 +106,7 @@ class TTDCCrawler:
             data["ctl00$MainContent$ctl00$btnSearch"] = "검색"
             resp = self.session.post(BOARD_URL, data=data, timeout=15)
             resp.encoding = "utf-8"
-            soup = BeautifulSoup(resp.text, "html.parser")
+            soup = BeautifulSoup(resp.text, "lxml")
             asp_fields = self._extract_asp_fields(soup)
 
         # 첫 페이지 파싱
@@ -144,7 +148,7 @@ class TTDCCrawler:
             try:
                 resp = self.session.post(BOARD_URL, data=data, timeout=15)
                 resp.encoding = "utf-8"
-                soup = BeautifulSoup(resp.text, "html.parser")
+                soup = BeautifulSoup(resp.text, "lxml")
                 asp_fields = self._extract_asp_fields(soup)
 
                 items = self._parse_page(soup)

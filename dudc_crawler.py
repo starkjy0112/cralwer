@@ -4,6 +4,7 @@
 GET 요청 + HTML 파싱 방식 (서버사이드 렌더링)
 """
 import requests
+from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -65,7 +66,7 @@ class DUDCCrawler:
     def _parse_page(self, html: str):
         """HTML에서 게시물 목록 파싱"""
         results = []
-        soup = BeautifulSoup(html, "html.parser")
+        soup = BeautifulSoup(html, "lxml")
 
         table = soup.find("table", class_="tbl_board")
         if not table:

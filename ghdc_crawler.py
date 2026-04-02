@@ -8,6 +8,7 @@ Target: https://ghdc.or.kr/sub.html?code=08_05&Radd=08_05
 """
 import re
 import requests
+from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
 from typing import Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -32,6 +33,9 @@ class GhdcCrawler:
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
         })
+        adapter = HTTPAdapter(pool_connections=1, pool_maxsize=20)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
         self._init_cookies = False
 
     def _ensure_cookies(self):
@@ -53,7 +57,7 @@ class GhdcCrawler:
             resp = self.session.get(self.SEARCH_URL, params=params, timeout=30)
             resp.raise_for_status()
             resp.encoding = "utf-8"
-            return BeautifulSoup(resp.text, "html.parser")
+            return BeautifulSoup(resp.text, "lxml")
         except requests.RequestException as e:
             print(f"[ERROR] Search failed: {e}")
             return None
@@ -109,7 +113,7 @@ class GhdcCrawler:
         try:
             resp = self.session.get(url, timeout=15)
             resp.encoding = "utf-8"
-            soup = BeautifulSoup(resp.text, "html.parser")
+            soup = BeautifulSoup(resp.text, "lxml")
 
             for dl in soup.select("dl"):
                 dts = dl.select("dt")

@@ -9,6 +9,7 @@ URL 패턴:
 """
 import re
 import requests
+from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
 from urllib.parse import quote
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -30,6 +31,9 @@ class GYSCrawler:
                 "Chrome/120.0.0.0 Safari/537.36"
             ),
         })
+        adapter = HTTPAdapter(pool_connections=1, pool_maxsize=20)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
         self.session.verify = False
 
     def _build_url(self, keyword, page):
@@ -46,7 +50,7 @@ class GYSCrawler:
         url = self._build_url(keyword, page)
         resp = self.session.get(url, timeout=15)
         resp.encoding = "euc-kr"
-        soup = BeautifulSoup(resp.text, "html.parser")
+        soup = BeautifulSoup(resp.text, "lxml")
 
         # 마지막 페이지 번호 추출
         total_pages = 1
