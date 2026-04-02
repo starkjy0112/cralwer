@@ -41,7 +41,7 @@ class YeojuGosiCrawler:
             "pageUnit": str(PAGE_SIZE),
         }
         if keyword:
-            params["searchCnd"] = "all"
+            params["searchCnd"] = "B_Subject"
             params["searchKrwd"] = keyword
 
         resp = self.session.get(LIST_URL, params=params, timeout=15)

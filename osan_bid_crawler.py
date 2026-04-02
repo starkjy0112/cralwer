@@ -38,11 +38,12 @@ class OsanBidCrawler:
     def _fetch_page(self, keyword, page):
         data = {
             "page": str(page),
-            "seCode": "02",
             "recordCountPerPage": str(PAGE_SIZE),
         }
+        if not keyword:
+            data["seCode"] = "02"
         if keyword:
-            data["searchType"] = "NOT_ANCMT_SJ"
+            data["searchType"] = "tit"
             data["searchTxt"] = keyword
 
         resp = self.session.post(

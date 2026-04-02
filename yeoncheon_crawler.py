@@ -41,7 +41,7 @@ class YeoncheonCrawler:
             "pageIndex": str(page),
         }
         if keyword:
-            params["searchCnd"] = "all"
+            params["searchCnd"] = "SJ"
             params["searchKrwd"] = keyword
 
         resp = self.session.get(LIST_URL, params=params, timeout=15)

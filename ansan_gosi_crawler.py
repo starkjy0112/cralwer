@@ -39,9 +39,11 @@ class AnsanGosiCrawler:
     def _fetch_page(self, keyword, page):
         params = {
             "bbs_code": BBS_CODE,
+            "key": "271",
             "currentPage": str(page),
         }
         if keyword:
+            params["sch_type"] = "sj"
             params["sch_text"] = keyword
 
         resp = self.session.get(LIST_URL, params=params, timeout=15)
