@@ -36,6 +36,12 @@ class SeongnamBidCrawler:
         adapter = HTTPAdapter(pool_connections=1, pool_maxsize=20)
         self.session.mount("https://", adapter)
         self.session.mount("http://", adapter)
+        # 세션 초기화 (쿠키 획득)
+        try:
+            self.session.get("https://eminwon.seongnam.go.kr/emwp/jsp/ofr/OfrNotAncmtLSub.jsp?not_ancmt_se_code=02",
+                           timeout=15, verify=False)
+        except Exception:
+            pass
 
     def _fetch_page(self, keyword, page):
         data = {
@@ -50,6 +56,8 @@ class SeongnamBidCrawler:
             "not_ancmt_se_code": "02",
             "title": "입찰공고",
             "countYn": "Y",
+            "epcCheck": "Y",
+            "recent_mm": "12",
             "ofr_pageSize": str(PAGE_SIZE),
             "list_gubun": "",
         }
