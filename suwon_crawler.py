@@ -40,7 +40,7 @@ class SuwonCrawler:
             "q_rowPerPage": str(PAGE_SIZE),
         }
         if keyword:
-            data["q_searchKeyTy"] = "SJ"
+            data["q_searchKey"] = "SJ"
             data["q_searchVal"] = keyword
 
         resp = self.session.post(LIST_URL, data=data, timeout=15)

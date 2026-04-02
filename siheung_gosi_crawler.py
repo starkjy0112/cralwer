@@ -40,8 +40,8 @@ class SiheungGosiCrawler:
             "page": str(page),
         }
         if keyword:
-            data["searchKey"] = "all"
-            data["qt"] = keyword
+            data["searchType"] = "tit"
+            data["searchTxt"] = keyword
 
         resp = self.session.post(LIST_URL, data=data, params={"mId": "0401040100"}, timeout=15)
         resp.encoding = "utf-8"

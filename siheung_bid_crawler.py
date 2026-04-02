@@ -41,8 +41,8 @@ class SiheungBidCrawler:
             "seCode": "02",
         }
         if keyword:
-            data["searchKey"] = "all"
-            data["qt"] = keyword
+            data["searchType"] = "tit"
+            data["searchTxt"] = keyword
 
         resp = self.session.post(LIST_URL, data=data, params={"mId": "0401050000"}, timeout=15)
         resp.encoding = "utf-8"
