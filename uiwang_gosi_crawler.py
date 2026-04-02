@@ -2,7 +2,7 @@
 """
 의왕시청 고시공고 크롤러
 https://www.uiwang.go.kr/UWKORINFO0701
-e-minwon iframe 기반 (eminwon.uiwang.go.kr), not_ancmt_se_code=01,04,06, 10건/페이지
+e-minwon iframe 기반, POST to OfrAction.do, not_ancmt_se_code=01,04,06
 """
 import math
 import re
@@ -12,8 +12,9 @@ from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
-EMINWON_URL = "https://eminwon.uiwang.go.kr/emwp/jsp/ofr/OfrNotAncmtL.jsp"
-DETAIL_BASE = "https://eminwon.uiwang.go.kr/emwp/jsp/ofr/OfrNotAncmtD.jsp"
+BASE_URL = "https://eminwon.uiwang.go.kr"
+JSP_URL = f"{BASE_URL}/emwp/jsp/ofr/OfrNotAncmtL.jsp"
+ACTION_URL = f"{BASE_URL}/emwp/gov/mogaha/ntis/web/ofr/action/OfrAction.do"
 PAGE_SIZE = 100
 
 
@@ -33,24 +34,38 @@ class UiwangGosiCrawler:
         self.session.mount("https://", adapter)
         self.session.mount("http://", adapter)
         self.session.verify = False
+        # 세션 초기화 (쿠키 획득)
+        try:
+            self.session.get(
+                f"{JSP_URL}?not_ancmt_se_code=01,04,06&homepage_pbs_yn=Y&subCheck=Y&list_gubun=A",
+                timeout=15)
+        except Exception:
+            pass
 
     def _fetch_page(self, keyword, page):
-        params = {
-            "not_ancmt_se_code": "01,04,06",
-            "list_gubun": "A",
-            "epcCheck": "",
+        data = {
             "pageIndex": str(page),
-            "ofr_pageSize": str(PAGE_SIZE),
             "jndinm": "OfrNotAncmtEJB",
             "context": "NTIS",
+            "method": "selectListOfrNotAncmt",
+            "methodnm": "selectListOfrNotAncmtHomepage",
+            "not_ancmt_se_code": "01,04,06",
             "homepage_pbs_yn": "Y",
             "subCheck": "Y",
+            "ofr_pageSize": str(PAGE_SIZE),
             "countYn": "Y",
+            "list_gubun": "A",
+            "nodate_recent_mm": "",
+            "nodate_last_mm": "",
+            "recent_mm": "",
+            "last_mm": "",
+            "yyyy": "",
+            "yyyymmdd": "",
         }
         if keyword:
-            params["cha_sbjt"] = keyword
+            data["not_ancmt_sj"] = keyword
 
-        resp = self.session.get(EMINWON_URL, params=params, timeout=15)
+        resp = self.session.post(ACTION_URL, data=data, timeout=15)
         resp.encoding = "utf-8"
         soup = BeautifulSoup(resp.text, "lxml")
 
@@ -62,42 +77,27 @@ class UiwangGosiCrawler:
             total_count = int(m.group(1).replace(",", ""))
 
         items = []
-        for table in soup.find_all("table"):
-            ths = table.find_all("th")
-            headers = [th.get_text(strip=True) for th in ths]
-            if "제목" in headers and "등록일" in headers:
-                rows = table.find_all("tr")
-                for row in rows:
-                    cells = row.find_all("td")
-                    if len(cells) < 5:
-                        continue
+        # 데이터는 onclick="searchDetail('ID')" 패턴의 td에 있음
+        rows = soup.find_all("tr")
+        for row in rows:
+            cells = row.find_all("td")
+            if len(cells) == 6:
+                onclick = cells[0].get("onclick", "")
+                if "searchDetail" not in onclick:
+                    continue
+                number = cells[0].get_text(strip=True)
+                notice_no = cells[1].get_text(strip=True)
+                title = cells[2].get_text(strip=True)
+                dept = cells[3].get_text(strip=True)
+                date = cells[4].get_text(strip=True)
 
-                    number = cells[0].get_text(strip=True)
-                    notice_no = cells[1].get_text(strip=True)
-                    title_cell = cells[2]
-                    dept = cells[3].get_text(strip=True)
-                    date = cells[4].get_text(strip=True)
-
-                    link = title_cell.find("a")
-                    if not link:
-                        continue
-
-                    title = link.get_text(strip=True)
-                    onclick = link.get("onclick", "")
-                    m_view = re.search(r"fn_detail\('([^']+)'\)", onclick)
-                    if m_view:
-                        detail_url = f"{DETAIL_BASE}?not_ancmt_mgt_no={m_view.group(1)}&not_ancmt_se_code=01,04,06"
-                    else:
-                        detail_url = "https://www.uiwang.go.kr/UWKORINFO0701"
-
-                    items.append({
-                        "number": number,
-                        "title": title,
-                        "date": date,
-                        "url": detail_url,
-                        "organization": "의왕시청",
-                    })
-                break
+                items.append({
+                    "number": notice_no if notice_no else number,
+                    "title": title,
+                    "date": date,
+                    "url": "https://www.uiwang.go.kr/UWKORINFO0701",
+                    "organization": "의왕시청",
+                })
 
         return items, total_count
 

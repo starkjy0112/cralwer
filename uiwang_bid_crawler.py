@@ -2,7 +2,7 @@
 """
 의왕시청 입찰정보 크롤러
 https://www.uiwang.go.kr/UWKORINFO0901
-e-minwon iframe 기반 (eminwon.uiwang.go.kr), not_ancmt_se_code=02, 10건/페이지
+e-minwon iframe 기반, POST to OfrAction.do, not_ancmt_se_code=02
 """
 import math
 import re
@@ -12,8 +12,9 @@ from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
-EMINWON_URL = "https://eminwon.uiwang.go.kr/emwp/jsp/ofr/OfrNotAncmtL.jsp"
-DETAIL_BASE = "https://eminwon.uiwang.go.kr/emwp/jsp/ofr/OfrNotAncmtD.jsp"
+BASE_URL = "https://eminwon.uiwang.go.kr"
+JSP_URL = f"{BASE_URL}/emwp/jsp/ofr/OfrNotAncmtL.jsp"
+ACTION_URL = f"{BASE_URL}/emwp/gov/mogaha/ntis/web/ofr/action/OfrAction.do"
 PAGE_SIZE = 100
 
 
@@ -33,23 +34,39 @@ class UiwangBidCrawler:
         self.session.mount("https://", adapter)
         self.session.mount("http://", adapter)
         self.session.verify = False
+        # 세션 초기화 (쿠키 획득)
+        try:
+            self.session.get(
+                f"{JSP_URL}?not_ancmt_se_code=02&list_gubun=A&epcCheck=Y",
+                timeout=15)
+        except Exception:
+            pass
 
     def _fetch_page(self, keyword, page):
-        params = {
-            "not_ancmt_se_code": "02",
-            "list_gubun": "A",
-            "epcCheck": "Y",
+        data = {
             "pageIndex": str(page),
-            "ofr_pageSize": str(PAGE_SIZE),
             "jndinm": "OfrNotAncmtEJB",
             "context": "NTIS",
+            "method": "selectListOfrNotAncmt",
+            "methodnm": "selectListOfrNotAncmtHomepage",
+            "not_ancmt_se_code": "02",
             "homepage_pbs_yn": "Y",
+            "subCheck": "N",
+            "ofr_pageSize": str(PAGE_SIZE),
             "countYn": "Y",
+            "list_gubun": "A",
+            "epcCheck": "Y",
+            "nodate_recent_mm": "",
+            "nodate_last_mm": "",
+            "recent_mm": "",
+            "last_mm": "",
+            "yyyy": "",
+            "yyyymmdd": "",
         }
         if keyword:
-            params["cha_sbjt"] = keyword
+            data["not_ancmt_sj"] = keyword
 
-        resp = self.session.get(EMINWON_URL, params=params, timeout=15)
+        resp = self.session.post(ACTION_URL, data=data, timeout=15)
         resp.encoding = "utf-8"
         soup = BeautifulSoup(resp.text, "lxml")
 
@@ -61,7 +78,6 @@ class UiwangBidCrawler:
             total_count = int(m.group(1).replace(",", ""))
 
         items = []
-        # 테이블: 번호, 고시공고번호, 제목, 담당부서, 등록일, 게재기간, 조회수
         for table in soup.find_all("table"):
             ths = table.find_all("th")
             headers = [th.get_text(strip=True) for th in ths]
@@ -84,14 +100,14 @@ class UiwangBidCrawler:
 
                     title = link.get_text(strip=True)
                     onclick = link.get("onclick", "")
-                    m_view = re.search(r"fn_detail\('([^']+)'\)", onclick)
+                    m_view = re.search(r"searchDetail\('([^']+)'\)", onclick)
                     if m_view:
-                        detail_url = f"{DETAIL_BASE}?not_ancmt_mgt_no={m_view.group(1)}&not_ancmt_se_code=02"
+                        detail_url = f"https://www.uiwang.go.kr/UWKORINFO0901"
                     else:
                         detail_url = "https://www.uiwang.go.kr/UWKORINFO0901"
 
                     items.append({
-                        "number": number,
+                        "number": f"{notice_no}" if notice_no else number,
                         "title": title,
                         "date": date,
                         "url": detail_url,
