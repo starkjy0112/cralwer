@@ -1036,7 +1036,7 @@ def search(crawler_id):
     with cache_lock:
         if cache_key in cache:
             cached = cache[cache_key]
-            if time.time() - cached["time"] < 300:  # 5분 캐시
+            if time.time() - cached["time"] < 1800:  # 30분 캐시
                 return jsonify({
                     "success": True,
                     "data": cached["data"],
@@ -1188,20 +1188,58 @@ def search_all():
 
 def warmup_cookies():
     """서버 시작 시 알리오 쿠키 미리 획득"""
-    import threading
     def _warmup():
         try:
             print("[웜업] 알리오 쿠키 획득 중...")
             crawler = AlioCrawler()
-            crawler.search("", max_pages=1)  # 빈 검색으로 쿠키만 획득
+            crawler.search("", max_pages=1)
             print("[웜업] 알리오 쿠키 획득 완료!")
         except Exception as e:
             print(f"[웜업] 실패: {e}")
 
-    # 백그라운드에서 실행
     threading.Thread(target=_warmup, daemon=True).start()
 
 
+# 느린 크롤러 백그라운드 프리패치
+SLOW_CRAWLERS = [
+    "gjcity_gosi", "gjcity_bid", "pyeongtaek_gosi", "pyeongtaek_bid",
+    "gwangmyeong_gosi", "gwangmyeong_bid", "ansan_gosi", "ansan_bid",
+    "uijeongbu_gosi", "uijeongbu_bid", "siheung_gosi", "siheung_bid",
+    "dongducheon_gosi", "dongducheon_bid", "gimpo_gosi", "gimpo_bid",
+    "yangpyeong", "yeoju_bid", "anseong_gosi", "uiwang_gosi",
+    "icheon_gosi", "icheon_bid", "pocheon_gosi", "pocheon_bid",
+]
+PREFETCH_KEYWORDS = ["공고", "용역"]
+PREFETCH_INTERVAL = 1800  # 30분마다 갱신
+
+
+def prefetch_slow_crawlers():
+    """느린 크롤러를 백그라운드에서 주기적으로 프리패치"""
+    def _prefetch():
+        while True:
+            for crawler_id in SLOW_CRAWLERS:
+                if crawler_id not in CRAWLERS:
+                    continue
+                crawler = CRAWLERS[crawler_id]["instance"]
+                for keyword in PREFETCH_KEYWORDS:
+                    cache_key = f"{crawler_id}:{keyword}:1000::"
+                    try:
+                        results = crawler.search(keyword, max_pages=1000)
+                        with cache_lock:
+                            cache[cache_key] = {
+                                "data": results,
+                                "time": time.time()
+                            }
+                        print(f"[프리패치] {crawler_id} '{keyword}': {len(results)}건")
+                    except Exception as e:
+                        print(f"[프리패치] {crawler_id} '{keyword}' 실패: {e}")
+            print(f"[프리패치] 완료. {PREFETCH_INTERVAL}초 후 재실행")
+            time.sleep(PREFETCH_INTERVAL)
+
+    threading.Thread(target=_prefetch, daemon=True).start()
+
+
 if __name__ == "__main__":
-    warmup_cookies()  # 서버 시작 시 쿠키 미리 획득
+    warmup_cookies()
+    prefetch_slow_crawlers()
     app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", 5001)))
