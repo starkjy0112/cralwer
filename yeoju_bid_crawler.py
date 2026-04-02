@@ -88,7 +88,7 @@ class YeojuBidCrawler:
                 detail_url = href
 
             dept = tds[5].get_text(strip=True)
-            date = tds[6].get_text(strip=True)
+            date = tds[6].get_text(strip=True).replace(".", "-")
 
             if total_count == 0 and page == 1 and number.isdigit():
                 total_count = int(number)

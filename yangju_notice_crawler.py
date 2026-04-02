@@ -95,7 +95,7 @@ class YangjuNoticeCrawler:
                 detail_url = href
 
             dept = tds[2].get_text(strip=True)
-            date = tds[4].get_text(strip=True)
+            date = tds[4].get_text(strip=True).replace(".", "-")
 
             items.append({
                 "number": number,
