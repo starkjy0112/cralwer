@@ -50,7 +50,7 @@ class ChungjuCrawler:
             "searchCnd": "B_Subject",
         }
         if keyword:
-            params["searchKrwd"] = keyword
+            params["ancmt_sj"] = keyword
         resp = self.session.get(LIST_URL, params=params, timeout=30)
         resp.encoding = "utf-8"
         soup = BeautifulSoup(resp.text, "lxml")
