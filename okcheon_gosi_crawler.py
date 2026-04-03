@@ -48,6 +48,10 @@ class OkcheonGosiCrawler:
         soup = BeautifulSoup(resp.text, "lxml")
 
         total_count = 0
+        m = re.search(r'총\s*(\d[\d,]*)\s*건', soup.get_text())
+        if m:
+            total_count = int(m.group(1).replace(",", ""))
+
         items = []
         table = soup.select_one("table")
         if not table:
