@@ -2,21 +2,23 @@
 """
 태백시청 입찰공고 크롤러
 http://ehojo.taebaek.go.kr/bid
-iframe 기반 (hanayo.net), 본문 페이지 스크래핑
+실제 데이터는 hanayo.net iframe (HTML 파싱), EUC-KR, 10건/페이지
 """
 import math
 import re
+import subprocess
 import requests
 from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
-BASE_URL = "http://ehojo.taebaek.go.kr"
-LIST_URL = f"{BASE_URL}/bid"
-IFRAME_BASE = "http://g.hanayo.net"
+BASE_URL = "https://g.hanayo.net"
+LIST_URL = f"{BASE_URL}/main2024.html"
+DETAIL_BASE = "http://ehojo.taebaek.go.kr/bid"
 PAGE_SIZE = 10
 ORGANIZATION_NAME = "태백시청"
+GCODE = "taebaek"
 
 
 class TaebaekBidCrawler:
@@ -30,85 +32,108 @@ class TaebaekBidCrawler:
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
                 "Chrome/120.0.0.0 Safari/537.36"
             ),
+            "Referer": DETAIL_BASE,
         })
         adapter = HTTPAdapter(pool_connections=1, pool_maxsize=20)
         self.session.mount("https://", adapter)
         self.session.mount("http://", adapter)
+        self.session.verify = False
 
-    def _fetch_page(self, keyword, page):
-        """hanayo iframe API 호출"""
-        params = {
-            "gcode": "taebaek",
-            "type": "bid",
-            "btype": "",
-            "page": str(page),
-        }
+    def _fetch_page_curl(self, keyword, page):
+        import urllib.parse
+        kw_encoded = ""
         if keyword:
-            params["search"] = keyword
+            try:
+                kw_encoded = urllib.parse.quote(keyword.encode("euc-kr"))
+            except (UnicodeEncodeError, UnicodeDecodeError):
+                kw_encoded = urllib.parse.quote(keyword)
 
-        items = []
-        total_count = 0
+        params = {
+            "gcode": GCODE,
+            "type": "bid",
+            "btype": "0",
+            "page": str(page),
+            "keyword": kw_encoded,
+            "keywordIdx": "1",
+            "bt": "",
+            "wday1": "",
+            "wday2": "",
+        }
+        query = "&".join(f"{k}={v}" for k, v in params.items())
+        url = f"{LIST_URL}?{query}"
 
         try:
-            resp = self.session.get(
-                f"{IFRAME_BASE}/main2024.html",
-                params=params,
-                timeout=30,
+            result = subprocess.run(
+                ["curl", "-sk", "--max-time", "45", url,
+                 "-H", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                 "-H", f"Referer: {DETAIL_BASE}"],
+                capture_output=True, timeout=50,
             )
-            resp.encoding = "utf-8"
-            soup = BeautifulSoup(resp.text, "lxml")
+            return result.stdout
+        except (subprocess.TimeoutExpired, Exception):
+            return b""
 
-            # hanayo 시스템은 테이블 또는 div 기반 리스트
-            table = soup.select_one("table")
-            if table:
-                rows = table.select("tbody tr")
-                if not rows:
-                    rows = table.select("tr")[1:]
-                for row in rows:
-                    tds = row.find_all("td")
-                    if len(tds) < 3:
-                        continue
-                    number = tds[0].get_text(strip=True)
-                    if total_count == 0 and number.isdigit():
-                        total_count = int(number)
-                    title_td = tds[1] if len(tds) > 1 else tds[0]
-                    link = title_td.find("a")
-                    title = link.get_text(strip=True) if link else title_td.get_text(strip=True)
-                    href = link.get("href", "") if link else ""
-                    date = ""
-                    for td in tds[2:]:
-                        txt = td.get_text(strip=True)
-                        m_date = re.search(r'(\d{4})[./-](\d{2})[./-](\d{2})', txt)
-                        if m_date:
-                            date = f"{m_date.group(1)}-{m_date.group(2)}-{m_date.group(3)}"
-                            break
-                    items.append({
-                        "number": number,
-                        "title": title,
-                        "date": date,
-                        "url": LIST_URL,
-                        "organization": ORGANIZATION_NAME,
-                    })
+    def _fetch_page(self, keyword, page):
+        raw = self._fetch_page_curl(keyword, page)
+        if not raw:
+            return [], 0
+
+        text = raw.decode("euc-kr", errors="replace")
+        soup = BeautifulSoup(text, "lxml")
+
+        total_count = 0
+        last_page_link = soup.select_one("#PageList a.last_page")
+        if last_page_link:
+            href = last_page_link.get("href", "")
+            m = re.search(r'page=(\d+)', href)
+            if m:
+                total_count = int(m.group(1)) * PAGE_SIZE
+        else:
+            page_div = soup.select_one("#PageList")
+            if page_div:
+                max_page = 1
+                for link in page_div.select("a"):
+                    m = re.search(r'page=(\d+)', link.get("href", ""))
+                    if m:
+                        max_page = max(max_page, int(m.group(1)))
+                if max_page > 1:
+                    total_count = max_page * PAGE_SIZE
+                else:
+                    selected = page_div.select_one(".selectedPage")
+                    if selected:
+                        total_count = PAGE_SIZE
+
+        items = []
+        rows = soup.select("ul.ul-body")
+        for row in rows:
+            cat_el = row.select_one("li.category2")
+            category = cat_el.get_text(strip=True) if cat_el else ""
+            num_el = row.select_one("li.num")
+            number = num_el.get_text(strip=True) if num_el else ""
+            time_el = row.select_one("li.time")
+            date = time_el.get_text(strip=True) if time_el else ""
+            dept_el = row.select_one("li.dept")
+            dept = dept_el.get_text(strip=True) if dept_el else ORGANIZATION_NAME
+            name_el = row.select_one("li.name")
+            if not name_el:
+                continue
+            link = name_el.select_one("a")
+            if not link:
+                continue
+            title = link.get_text(strip=True)
+            href = link.get("href", "")
+            if href.startswith("/"):
+                detail_url = f"{BASE_URL}{href}"
             else:
-                # div 기반 리스트
-                list_items = soup.select(".list-item, .bid-item, li")
-                for li in list_items:
-                    link = li.find("a")
-                    if not link:
-                        continue
-                    title = link.get_text(strip=True)
-                    text = li.get_text(strip=True)
-                    m_date = re.search(r'(\d{4})[./-](\d{2})[./-](\d{2})', text)
-                    date = f"{m_date.group(1)}-{m_date.group(2)}-{m_date.group(3)}" if m_date else ""
-                    items.append({
-                        "number": "",
-                        "title": title,
-                        "date": date,
-                        "url": LIST_URL,
-                        "organization": ORGANIZATION_NAME,
-                    })
-        except Exception:
-            pass
+                detail_url = href
+
+            items.append({
+                "number": number,
+                "title": f"[{category}] {title}" if category else title,
+                "date": date,
+                "url": detail_url,
+                "organization": ORGANIZATION_NAME,
+            })
 
         return items, total_count
 
@@ -116,9 +141,9 @@ class TaebaekBidCrawler:
 
     def search(self, keyword="", max_pages=10):
         first_items, total_count = self._fetch_page(keyword, 1)
-        total_pages = max(1, math.ceil(total_count / PAGE_SIZE)) if total_count else 1
+        total_pages = max(1, math.ceil(total_count / PAGE_SIZE))
         actual_pages = min(total_pages, max_pages)
-        print(f"  [Page 1/{actual_pages}] {len(first_items)}건 수집 (전체 {total_count}건)")
+        print(f"  [Page 1/{actual_pages}] {len(first_items)}건 수집 (전체 약 {total_count}건)")
 
         if actual_pages <= 1:
             all_items = first_items
@@ -148,6 +173,8 @@ class TaebaekBidCrawler:
 
 
 if __name__ == "__main__":
+    import urllib3
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     crawler = TaebaekBidCrawler()
     print("=== '공고' 검색 ===")
     results = crawler.search("공고", max_pages=1)

@@ -39,7 +39,7 @@ class JeongseonGosiCrawler:
         try:
             self.session.get(
                 f"{JSP_URL}?not_ancmt_se_code={SE_CODE}&homepage_pbs_yn=Y&subCheck=Y",
-                timeout=15)
+                timeout=30)
         except Exception:
             pass
 
@@ -59,11 +59,25 @@ class JeongseonGosiCrawler:
             "not_ancmt_cn": "",
             "dept_nm": "",
             "not_ancmt_reg_no": "",
+            "recent_mm": "",
+            "yyyy": "",
+            "yyyymmdd": "",
         }
         if keyword:
             data["not_ancmt_sj"] = keyword
 
-        resp = self.session.post(ACTION_URL, data=data, timeout=15)
+        resp = None
+        last_err = None
+        for attempt in range(3):
+            try:
+                resp = self.session.post(ACTION_URL, data=data, timeout=30)
+                break
+            except Exception as e:
+                last_err = e
+                import time
+                time.sleep(1 * (attempt + 1))
+        if resp is None:
+            return [], 0
         resp.encoding = "utf-8"
         soup = BeautifulSoup(resp.text, "lxml")
 

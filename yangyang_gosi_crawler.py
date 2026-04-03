@@ -57,9 +57,23 @@ class YangyangGosiCrawler:
             "dept_nm": "",
             "not_ancmt_reg_no": "",
             "temp": "",
+            "recent_mm": "",
+            "yyyy": "",
+            "yyyymmdd": "",
         }
 
-        resp = self.session.post(ACTION_URL, data=data, timeout=15)
+        resp = None
+        last_err = None
+        for attempt in range(3):
+            try:
+                resp = self.session.post(ACTION_URL, data=data, timeout=30)
+                break
+            except Exception as e:
+                last_err = e
+                import time
+                time.sleep(1 * (attempt + 1))
+        if resp is None:
+            return [], 0
         resp.encoding = "euc-kr"
         soup = BeautifulSoup(resp.text, "lxml")
 
