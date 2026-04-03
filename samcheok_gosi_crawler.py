@@ -40,6 +40,7 @@ class SamcheokGosiCrawler:
             "cpage": str(page),
         }
         if keyword:
+            params["stype"] = "title"
             params["sstring"] = keyword
 
         resp = self.session.get(LIST_URL, params=params, timeout=15, verify=False)

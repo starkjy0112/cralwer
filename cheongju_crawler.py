@@ -40,7 +40,7 @@ class CheongjuCrawler:
             "pageIndex": str(page),
         }
         if keyword:
-            params["searchCnd"] = "SJ"
+            params["searchCnd"] = "NOT_ANCMT_SJ"
             params["searchKrwd"] = keyword
         resp = self.session.get(LIST_URL, params=params, timeout=30)
         resp.encoding = "utf-8"

@@ -40,7 +40,7 @@ class CheorwonBidCrawler:
             "bbsNo": "26",
             "key": "208",
             "pageIndex": str(page),
-            "searchCnd": "all",
+            "searchCnd": "SJ",
         }
         if keyword:
             params["searchKrwd"] = keyword

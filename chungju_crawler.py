@@ -47,7 +47,7 @@ class ChungjuCrawler:
             "ofr_pageSize": "10",
             "ancmt_se_code": "01,02,04,05",
             "pageIndex": str(page),
-            "searchCnd": "all",
+            "searchCnd": "B_Subject",
         }
         if keyword:
             params["searchKrwd"] = keyword

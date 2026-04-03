@@ -39,7 +39,7 @@ class EumseongCrawler:
             "pageUnit": "10",
             "ofr_pageSize": "10",
             "pageIndex": str(page),
-            "searchCnd": "all",
+            "searchCnd": "B_Subject",
         }
         if keyword:
             params["searchKrwd"] = keyword
