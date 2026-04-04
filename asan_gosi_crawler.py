@@ -146,27 +146,42 @@ class AsanGosiCrawler:
 
     def search(self, keyword="", max_pages=10):
         first_items, total_count = self._fetch_page(keyword, 1)
-        total_pages = max(1, math.ceil(total_count / PAGE_SIZE))
-        actual_pages = min(total_pages, max_pages)
-        print(f"  [Page 1/{actual_pages}] {len(first_items)}건 수집 (전체 {total_count}건)")
-
-        if actual_pages <= 1:
-            all_items = first_items
+        # eminwon은 total_count가 검색과 무관하게 전체 건수 반환
+        # 키워드 있으면 순차적으로 빈 페이지 나올 때까지 가져옴
+        if keyword:
+            all_items = list(first_items)
+            print(f"  [Page 1] {len(first_items)}건 수집 (전체 {total_count}건)")
+            page = 2
+            empty_count = 0
+            while page <= max_pages and empty_count < 3:
+                items, _ = self._fetch_page(keyword, page)
+                if not items:
+                    empty_count += 1
+                else:
+                    empty_count = 0
+                    all_items.extend(items)
+                page += 1
         else:
-            page_results = {1: first_items}
-            with ThreadPoolExecutor(max_workers=self.WORKERS) as executor:
-                futures = {
-                    executor.submit(self._fetch_page, keyword, p): p
-                    for p in range(2, actual_pages + 1)
-                }
-                for future in as_completed(futures):
-                    p = futures[future]
-                    try:
-                        items, _ = future.result()
-                        if items:
-                            page_results[p] = items
-                    except Exception:
-                        pass
+            total_pages = max(1, math.ceil(total_count / PAGE_SIZE))
+            actual_pages = min(total_pages, max_pages)
+            print(f"  [Page 1/{actual_pages}] {len(first_items)}건 수집 (전체 {total_count}건)")
+            if actual_pages <= 1:
+                all_items = first_items
+            else:
+                page_results = {1: first_items}
+                with ThreadPoolExecutor(max_workers=self.WORKERS) as executor:
+                    futures = {
+                        executor.submit(self._fetch_page, keyword, p): p
+                        for p in range(2, actual_pages + 1)
+                    }
+                    for future in as_completed(futures):
+                        p = futures[future]
+                        try:
+                            items, _ = future.result()
+                            if items:
+                                page_results[p] = items
+                        except Exception:
+                            pass
 
             all_items = []
             for p in sorted(page_results.keys()):
