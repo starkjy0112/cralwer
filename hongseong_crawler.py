@@ -39,10 +39,10 @@ class HongseongCrawler:
             "pageIndex": str(page),
         }
         if keyword:
-            params["searchCondition"] = "sj"
+            params["searchCondition"] = "notAncmtSj"
             params["searchKeyword"] = keyword
 
-        resp = self.session.get(LIST_URL, params=params, timeout=15)
+        resp = self.session.post(LIST_URL, data=params, timeout=15)
         resp.encoding = "utf-8"
         soup = BeautifulSoup(resp.text, "lxml")
 
@@ -50,6 +50,10 @@ class HongseongCrawler:
         m = re.search(r'총\s*([\d,]+)\s*건', soup.get_text())
         if m:
             total_count = int(m.group(1).replace(",", ""))
+        if not total_count:
+            pages = [int(x) for x in re.findall(r'pageIndex=(\d+)', resp.text)]
+            if pages:
+                total_count = max(pages) * PAGE_SIZE
 
         items = []
         table = soup.select_one("table.bbsTable") or soup.select_one("table")

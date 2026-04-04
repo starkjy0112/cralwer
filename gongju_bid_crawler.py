@@ -51,7 +51,7 @@ class GongjuBidCrawler:
     def _fetch_page(self, keyword, page):
         data = {
             "pageIndex": str(page),
-            "searchCondition": "0",
+            "searchCondition": "notAncmtSj",
             "searchKeyword": keyword or "",
         }
 

@@ -35,10 +35,13 @@ class BoryeongCrawler:
         self.session.mount("https://", adapter)
         self.session.mount("http://", adapter)
 
-    def _fetch_page(self, page):
+    def _fetch_page(self, keyword, page):
         params = {
             "pageIndex": str(page),
         }
+        if keyword:
+            params["searchCondition"] = "subject"
+            params["searchKeyword"] = keyword
 
         resp = self.session.get(LIST_URL, params=params, timeout=15)
         resp.encoding = "utf-8"
@@ -93,7 +96,7 @@ class BoryeongCrawler:
     WORKERS = 20
 
     def search(self, keyword="", max_pages=10):
-        first_items, total_count = self._fetch_page(1)
+        first_items, total_count = self._fetch_page(keyword, 1)
         total_pages = max(1, math.ceil(total_count / PAGE_SIZE))
         actual_pages = min(total_pages, max_pages)
         print(f"  [Page 1/{actual_pages}] {len(first_items)}건 수집 (전체 {total_count}건)")
@@ -104,7 +107,7 @@ class BoryeongCrawler:
             page_results = {1: first_items}
             with ThreadPoolExecutor(max_workers=self.WORKERS) as executor:
                 futures = {
-                    executor.submit(self._fetch_page, p): p
+                    executor.submit(self._fetch_page, keyword, p): p
                     for p in range(2, actual_pages + 1)
                 }
                 for future in as_completed(futures):
@@ -119,10 +122,6 @@ class BoryeongCrawler:
             all_items = []
             for p in sorted(page_results.keys()):
                 all_items.extend(page_results[p])
-
-        # 서버 검색 미지원 → 클라이언트 필터
-        if keyword:
-            all_items = [item for item in all_items if keyword in item["title"]]
 
         all_items.sort(key=lambda x: x["date"], reverse=True)
         print(f"[{ORGANIZATION_NAME}] 완료: 총 {len(all_items)}건")
