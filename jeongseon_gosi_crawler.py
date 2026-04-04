@@ -6,6 +6,7 @@ e-minwon iframe 기반, POST to OfrAction.do, not_ancmt_se_code=01,04,05,06
 """
 import math
 import re
+import time
 import requests
 from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
@@ -74,7 +75,6 @@ class JeongseonGosiCrawler:
                 break
             except Exception as e:
                 last_err = e
-                import time
                 time.sleep(1 * (attempt + 1))
         if resp is None:
             return [], 0

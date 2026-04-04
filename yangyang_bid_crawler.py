@@ -6,6 +6,7 @@ iframe -> eminwon.yangyang.go.kr POST 기반, EUC-KR, 10건/페이지
 """
 import math
 import re
+import time
 import requests
 from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
@@ -70,7 +71,6 @@ class YangyangBidCrawler:
                 break
             except Exception as e:
                 last_err = e
-                import time
                 time.sleep(1 * (attempt + 1))
         if resp is None:
             return [], 0
