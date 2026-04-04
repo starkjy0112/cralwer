@@ -1,0 +1,144 @@
+# -*- coding: utf-8 -*-
+"""
+영덕군청 고시/공고 크롤러
+https://www.yd.go.kr/?page_id=763
+WordPress kboard 기반, GET, 10건/페이지
+"""
+import math
+import re
+import requests
+from requests.adapters import HTTPAdapter
+from bs4 import BeautifulSoup
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+
+BASE_URL = "https://www.yd.go.kr"
+PAGE_ID = "763"
+LIST_URL = f"{BASE_URL}/?page_id={PAGE_ID}"
+PAGE_SIZE = 10
+ORGANIZATION_NAME = "영덕군청"
+
+
+class YeongdeokGosiCrawler:
+    """영덕군청 고시/공고 크롤러"""
+
+    def __init__(self):
+        self.session = requests.Session()
+        self.session.headers.update({
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            ),
+        })
+        adapter = HTTPAdapter(pool_connections=1, pool_maxsize=20)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
+
+    def _fetch_page(self, keyword, page):
+        params = {
+            "page_id": PAGE_ID,
+            "mod": "list",
+            "pageid": str(page),
+        }
+        if keyword:
+            params["target"] = "title"
+            params["s"] = keyword
+
+        resp = self.session.get(BASE_URL, params=params, timeout=15)
+        resp.encoding = "utf-8"
+        soup = BeautifulSoup(resp.text, "lxml")
+
+        total_count = 0
+        items = []
+
+        kboard = soup.select_one("div.kboard-list")
+        if not kboard:
+            return items, total_count
+
+        table = kboard.find("table")
+        if not table:
+            return items, total_count
+
+        tbody = table.find("tbody")
+        rows = tbody.find_all("tr") if tbody else table.find_all("tr")[1:]
+
+        for row in rows:
+            tds = row.find_all("td")
+            if len(tds) < 4:
+                continue
+
+            uid_td = row.select_one("td.kboard-list-uid")
+            number = uid_td.get_text(strip=True) if uid_td else tds[0].get_text(strip=True)
+
+            if total_count == 0 and page == 1 and number.replace(",", "").isdigit():
+                total_count = int(number.replace(",", ""))
+
+            title_td = row.select_one("td.kboard-list-title")
+            if not title_td:
+                title_td = tds[1]
+            link = title_td.find("a")
+            if not link:
+                continue
+
+            title = link.get_text(strip=True)
+            href = link.get("href", "")
+            if href and not href.startswith("http"):
+                detail_url = f"{BASE_URL}{href}" if href.startswith("/") else f"{BASE_URL}/{href}"
+            else:
+                detail_url = href
+
+            date_td = row.select_one("td.kboard-list-date")
+            date = date_td.get_text(strip=True).replace(".", "-") if date_td else ""
+
+            items.append({
+                "number": number,
+                "title": title,
+                "date": date,
+                "url": detail_url,
+                "organization": ORGANIZATION_NAME,
+            })
+
+        return items, total_count
+
+    WORKERS = 20
+
+    def search(self, keyword="", max_pages=10):
+        first_items, total_count = self._fetch_page(keyword, 1)
+        total_pages = max(1, math.ceil(total_count / PAGE_SIZE))
+        actual_pages = min(total_pages, max_pages)
+        print(f"  [Page 1/{actual_pages}] {len(first_items)}건 수집 (전체 {total_count}건)")
+
+        if actual_pages <= 1:
+            all_items = first_items
+        else:
+            page_results = {1: first_items}
+            with ThreadPoolExecutor(max_workers=self.WORKERS) as executor:
+                futures = {
+                    executor.submit(self._fetch_page, keyword, p): p
+                    for p in range(2, actual_pages + 1)
+                }
+                for future in as_completed(futures):
+                    p = futures[future]
+                    try:
+                        items, _ = future.result()
+                        if items:
+                            page_results[p] = items
+                    except Exception:
+                        pass
+
+            all_items = []
+            for p in sorted(page_results.keys()):
+                all_items.extend(page_results[p])
+
+        all_items.sort(key=lambda x: x["date"], reverse=True)
+        print(f"[{ORGANIZATION_NAME} 고시/공고] 완료: 총 {len(all_items)}건")
+        return all_items
+
+
+if __name__ == "__main__":
+    crawler = YeongdeokGosiCrawler()
+    print("=== '공고' 검색 ===")
+    results = crawler.search("공고", max_pages=1)
+    for r in results[:3]:
+        print(f"  [{r['date']}] {r['title'][:50]}")
