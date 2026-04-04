@@ -51,7 +51,7 @@ class AsanGosiCrawler:
                     "ofr_pageSize": str(PAGE_SIZE),
                     "epcCheck": "Y",
                 },
-                timeout=15
+                timeout=60
             )
         except Exception:
             pass
