@@ -216,6 +216,54 @@ from jincheon_gosi_crawler import JincheonGosiCrawler
 from cheongju_crawler import CheongjuCrawler
 from chungju_crawler import ChungjuCrawler
 
+# 충청남도 시군 크롤러 (15개)
+from yesan_bid_crawler import YesanBidCrawler
+from cheonan_gosi_crawler import CheonanGosiCrawler
+from cheonan_bid_crawler import CheonanBidCrawler
+from cheongyang_crawler import CheongyangCrawler
+from taean_bid_crawler import TaeanBidCrawler
+from taean_gosi_crawler import TaeanGosiCrawler
+from hongseong_crawler import HongseongCrawler
+from gyeryong_crawler import GyeryongCrawler
+from gongju_bid_crawler import GongjuBidCrawler
+from gongju_gosi_crawler import GongjuGosiCrawler
+from geumsan_crawler import GeumsanCrawler
+from nonsan_crawler import NonsanCrawler
+from dangjin_crawler import DangjinCrawler
+from buyeo_gosi_crawler import BuyeoGosiCrawler
+from buyeo_bid_crawler import BuyeoBidCrawler
+from boryeong_crawler import BoryeongCrawler
+from seosan_gosi_crawler import SeosanGosiCrawler
+from seosan_bid_crawler import SeosanBidCrawler
+from seocheon_bid_crawler import SeocheonBidCrawler
+from seocheon_gosi_crawler import SeocheonGosiCrawler
+from asan_bid_crawler import AsanBidCrawler
+from asan_gosi_crawler import AsanGosiCrawler
+from yesan_gosi_crawler import YesanGosiCrawler
+
+# 경상남도 시군 크롤러 (21개)
+from geoje_crawler import GeojeCrawler
+from geochang_crawler import GeochangCrawler
+from goseong_gn_crawler import GoseongGnCrawler
+from gimhae_crawler import GimhaeCrawler
+from namhae_crawler import NamhaeCrawler
+from miryang_crawler import MiryangCrawler
+from sacheon_crawler import SacheonCrawler
+from sancheong_crawler import SancheongCrawler
+from yangsan_gosi_crawler import YangsanGosiCrawler
+from yangsan_bid_crawler import YangsanBidCrawler
+from uiryeong_gosi_crawler import UiryeongGosiCrawler
+from uiryeong_bid_crawler import UiryeongBidCrawler
+from jinju_crawler import JinjuCrawler
+from changnyeong_gosi_crawler import ChangnyeongGosiCrawler
+from changnyeong_bid_crawler import ChangnyeongBidCrawler
+from changwon_gosi_crawler import ChangwonGosiCrawler
+from changwon_bid_crawler import ChangwonBidCrawler
+from tongyeong_crawler import TongyeongCrawler
+from hadong_crawler import HadongCrawler
+from haman_crawler import HamanCrawler
+from hamyang_crawler import HamyangCrawler
+
 app = Flask(__name__)
 
 
@@ -1338,6 +1386,272 @@ CRAWLERS = {
         "type": "공고/고시/입찰",
         "instance": ChungjuCrawler(),
         "url": "https://www.chungju.go.kr"
+    },
+    # 충청남도 시군 크롤러 (15개)
+    "yesan_bid": {
+        "name": "예산군청",
+        "type": "입찰",
+        "instance": YesanBidCrawler(),
+        "url": "https://www.yesan.go.kr"
+    },
+    "cheonan_gosi": {
+        "name": "천안시청",
+        "type": "행정공고",
+        "instance": CheonanGosiCrawler(),
+        "url": "https://www.cheonan.go.kr"
+    },
+    "cheonan_bid": {
+        "name": "천안시청",
+        "type": "입찰",
+        "instance": CheonanBidCrawler(),
+        "url": "https://www.cheonan.go.kr"
+    },
+    "cheongyang": {
+        "name": "청양군청",
+        "type": "고시공고",
+        "instance": CheongyangCrawler(),
+        "url": "https://www.cheongyang.go.kr"
+    },
+    "taean_bid": {
+        "name": "태안군청",
+        "type": "입찰",
+        "instance": TaeanBidCrawler(),
+        "url": "https://www.taean.go.kr"
+    },
+    "taean_gosi": {
+        "name": "태안군청",
+        "type": "일반공고",
+        "instance": TaeanGosiCrawler(),
+        "url": "https://www.taean.go.kr"
+    },
+    "hongseong": {
+        "name": "홍성군청",
+        "type": "고시공고",
+        "instance": HongseongCrawler(),
+        "url": "https://www.hongseong.go.kr"
+    },
+    "gyeryong": {
+        "name": "계룡시청",
+        "type": "고시/공고",
+        "instance": GyeryongCrawler(),
+        "url": "https://gyeryong.go.kr"
+    },
+    "gongju_bid": {
+        "name": "공주시청",
+        "type": "입찰공고",
+        "instance": GongjuBidCrawler(),
+        "url": "https://www.gongju.go.kr"
+    },
+    "gongju_gosi": {
+        "name": "공주시청",
+        "type": "일반공고",
+        "instance": GongjuGosiCrawler(),
+        "url": "https://www.gongju.go.kr"
+    },
+    "geumsan": {
+        "name": "금산군청",
+        "type": "고시/공고",
+        "instance": GeumsanCrawler(),
+        "url": "https://www.geumsan.go.kr"
+    },
+    "nonsan": {
+        "name": "논산시청",
+        "type": "공고",
+        "instance": NonsanCrawler(),
+        "url": "https://nonsan.go.kr"
+    },
+    "dangjin": {
+        "name": "당진시청",
+        "type": "고시/공고",
+        "instance": DangjinCrawler(),
+        "url": "https://www.dangjin.go.kr"
+    },
+    "buyeo_gosi": {
+        "name": "부여군청",
+        "type": "고시공고",
+        "instance": BuyeoGosiCrawler(),
+        "url": "https://www.buyeo.go.kr"
+    },
+    "buyeo_bid": {
+        "name": "부여군청",
+        "type": "입찰공고",
+        "instance": BuyeoBidCrawler(),
+        "url": "https://www.buyeo.go.kr"
+    },
+    "boryeong": {
+        "name": "보령시청",
+        "type": "고시공고",
+        "instance": BoryeongCrawler(),
+        "url": "https://www.brcn.go.kr"
+    },
+    "seosan_gosi": {
+        "name": "서산시청",
+        "type": "공고/고시",
+        "instance": SeosanGosiCrawler(),
+        "url": "https://www.seosan.go.kr"
+    },
+    "seosan_bid": {
+        "name": "서산시청",
+        "type": "입찰공고",
+        "instance": SeosanBidCrawler(),
+        "url": "https://www.seosan.go.kr"
+    },
+    "seocheon_bid": {
+        "name": "서천군청",
+        "type": "입찰공고",
+        "instance": SeocheonBidCrawler(),
+        "url": "https://www.seocheon.go.kr"
+    },
+    "seocheon_gosi": {
+        "name": "서천군청",
+        "type": "일반공고",
+        "instance": SeocheonGosiCrawler(),
+        "url": "https://www.seocheon.go.kr"
+    },
+    "asan_bid": {
+        "name": "아산시청",
+        "type": "입찰공고",
+        "instance": AsanBidCrawler(),
+        "url": "https://www.asan.go.kr"
+    },
+    "asan_gosi": {
+        "name": "아산시청",
+        "type": "고시공고",
+        "instance": AsanGosiCrawler(),
+        "url": "https://www.asan.go.kr"
+    },
+    "yesan_gosi": {
+        "name": "예산군청",
+        "type": "고시공고",
+        "instance": YesanGosiCrawler(),
+        "url": "https://www.yesan.go.kr"
+    },
+    # 경상남도 시군 크롤러 (21개)
+    "geoje": {
+        "name": "거제시청",
+        "type": "고시공고",
+        "instance": GeojeCrawler(),
+        "url": "https://www.geoje.go.kr"
+    },
+    "geochang": {
+        "name": "거창군청",
+        "type": "고시공고",
+        "instance": GeochangCrawler(),
+        "url": "https://www.geochang.go.kr"
+    },
+    "goseong_gn": {
+        "name": "고성군청(경남)",
+        "type": "고시공고",
+        "instance": GoseongGnCrawler(),
+        "url": "https://www.goseong.go.kr"
+    },
+    "gimhae": {
+        "name": "김해시청",
+        "type": "고시공고",
+        "instance": GimhaeCrawler(),
+        "url": "https://www.gimhae.go.kr"
+    },
+    "namhae": {
+        "name": "남해군청",
+        "type": "고시공고",
+        "instance": NamhaeCrawler(),
+        "url": "https://www.namhae.go.kr"
+    },
+    "miryang": {
+        "name": "밀양시청",
+        "type": "고시공고",
+        "instance": MiryangCrawler(),
+        "url": "https://www.miryang.go.kr"
+    },
+    "sacheon": {
+        "name": "사천시청",
+        "type": "고시공고",
+        "instance": SacheonCrawler(),
+        "url": "https://www.sacheon.go.kr"
+    },
+    "sancheong": {
+        "name": "산청군청",
+        "type": "고시공고",
+        "instance": SancheongCrawler(),
+        "url": "https://www.sancheong.go.kr"
+    },
+    "yangsan_gosi": {
+        "name": "양산시청",
+        "type": "고시",
+        "instance": YangsanGosiCrawler(),
+        "url": "https://www.yangsan.go.kr"
+    },
+    "yangsan_bid": {
+        "name": "양산시청",
+        "type": "입찰",
+        "instance": YangsanBidCrawler(),
+        "url": "https://www.yangsan.go.kr"
+    },
+    "uiryeong_gosi": {
+        "name": "의령군청",
+        "type": "고시",
+        "instance": UiryeongGosiCrawler(),
+        "url": "https://www.uiryeong.go.kr"
+    },
+    "uiryeong_bid": {
+        "name": "의령군청",
+        "type": "입찰",
+        "instance": UiryeongBidCrawler(),
+        "url": "https://www.uiryeong.go.kr"
+    },
+    "jinju": {
+        "name": "진주시청",
+        "type": "고시공고",
+        "instance": JinjuCrawler(),
+        "url": "https://www.jinju.go.kr"
+    },
+    "changnyeong_gosi": {
+        "name": "창녕군청",
+        "type": "고시공고",
+        "instance": ChangnyeongGosiCrawler(),
+        "url": "https://www.cng.go.kr"
+    },
+    "changnyeong_bid": {
+        "name": "창녕군청",
+        "type": "입찰공고",
+        "instance": ChangnyeongBidCrawler(),
+        "url": "https://www.cng.go.kr"
+    },
+    "changwon_gosi": {
+        "name": "창원특례시청",
+        "type": "고시공고",
+        "instance": ChangwonGosiCrawler(),
+        "url": "https://www.changwon.go.kr"
+    },
+    "changwon_bid": {
+        "name": "창원특례시청",
+        "type": "입찰공고",
+        "instance": ChangwonBidCrawler(),
+        "url": "https://www.changwon.go.kr"
+    },
+    "tongyeong": {
+        "name": "통영시청",
+        "type": "고시공고",
+        "instance": TongyeongCrawler(),
+        "url": "https://www.tongyeong.go.kr"
+    },
+    "hadong": {
+        "name": "하동군청",
+        "type": "공고고시",
+        "instance": HadongCrawler(),
+        "url": "https://www.hadong.go.kr"
+    },
+    "haman": {
+        "name": "함안군청",
+        "type": "고시공고",
+        "instance": HamanCrawler(),
+        "url": "https://www.haman.go.kr"
+    },
+    "hamyang": {
+        "name": "함양군청",
+        "type": "고시공고",
+        "instance": HamyangCrawler(),
+        "url": "https://www.hygn.go.kr"
     },
 }
 
