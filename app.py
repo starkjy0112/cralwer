@@ -164,6 +164,23 @@ from hanam_bid_crawler import HanamBidCrawler
 from hwaseong_gosi_crawler import HwaseongGosiCrawler
 from hwaseong_bid_crawler import HwaseongBidCrawler
 
+# 서울특별시 자치구 크롤러 (15개)
+from mapo_crawler import MapoCrawler
+from sdm_crawler import SdmCrawler
+from seocho_crawler import SeochoCrawler
+from seongdong_crawler import SeongdongCrawler
+from seongbuk_crawler import SeongbukCrawler
+from songpa_gosi_crawler import SongpaGosiCrawler
+from songpa_bid_crawler import SongpaBidCrawler
+from yangcheon_crawler import YangcheonCrawler
+from ydp_crawler import YdpCrawler
+from yongsan_crawler import YongsanCrawler
+from eunpyeong_gosi_crawler import EunpyeongGosiCrawler
+from eunpyeong_bid_crawler import EunpyeongBidCrawler
+from jongno_crawler import JongnoCrawler
+from junggu_crawler import JungguCrawler
+from jungnang_crawler import JungnangCrawler
+
 # 강원도 시군 크롤러 (133-148)
 from gangneung_gosi_crawler import GangneungGosiCrawler
 from gangneung_bid_crawler import GangneungBidCrawler
@@ -347,6 +364,25 @@ from hampyeong_gosi_crawler import HampyeongGosiCrawler
 from hampyeong_notice_crawler import HampyeongNoticeCrawler
 from haenam_gosi_crawler import HaenamGosiCrawler
 from haenam_notice_crawler import HaenamNoticeCrawler
+
+# 서울특별시 자치구 크롤러 + 전남 화순
+from hwasun_crawler import HwasunCrawler
+from gangnam_crawler import GangnamCrawler
+from gangdong_crawler import GangdongCrawler
+from gangbuk_crawler import GangbukCrawler
+from gangseo_gosi_crawler import GangseoGosiCrawler
+from gangseo_bid_crawler import GangseoBidCrawler
+from gwanak_gosi_crawler import GwanakGosiCrawler
+from gwanak_bid_crawler import GwanakBidCrawler
+from gwangjin_crawler import GwangjinCrawler
+from guro_crawler import GuroCrawler
+from geumcheon_gosi_crawler import GeumcheonGosiCrawler
+from geumcheon_bid_crawler import GeumcheonBidCrawler
+from nowon_crawler import NowonCrawler
+from dobong_crawler import DobongCrawler
+from ddm_gosi_crawler import DdmGosiCrawler
+from ddm_bid_crawler import DdmBidCrawler
+from dongjak_crawler import DongjakCrawler
 
 app = Flask(__name__)
 
@@ -2207,6 +2243,200 @@ CRAWLERS = {
         "type": "고시공고(게시판)",
         "instance": HaenamNoticeCrawler(),
         "url": "https://www.haenam.go.kr"
+    },
+    # 서울특별시 자치구 크롤러
+    "mapo": {
+        "name": "마포구청",
+        "type": "고시공고",
+        "instance": MapoCrawler(),
+        "url": "https://www.mapo.go.kr"
+    },
+    "sdm": {
+        "name": "서대문구청",
+        "type": "공지사항",
+        "instance": SdmCrawler(),
+        "url": "https://www.sdm.go.kr"
+    },
+    "seocho": {
+        "name": "서초구청",
+        "type": "고시공고",
+        "instance": SeochoCrawler(),
+        "url": "https://www.seocho.go.kr"
+    },
+    "seongdong": {
+        "name": "성동구청",
+        "type": "고시공고",
+        "instance": SeongdongCrawler(),
+        "url": "https://www.sd.go.kr"
+    },
+    "seongbuk": {
+        "name": "성북구청",
+        "type": "고시공고",
+        "instance": SeongbukCrawler(),
+        "url": "https://www.sb.go.kr"
+    },
+    "songpa_gosi": {
+        "name": "송파구청",
+        "type": "고시공고",
+        "instance": SongpaGosiCrawler(),
+        "url": "https://www.songpa.go.kr"
+    },
+    "songpa_bid": {
+        "name": "송파구청",
+        "type": "입찰공고",
+        "instance": SongpaBidCrawler(),
+        "url": "http://bid.songpa.go.kr"
+    },
+    "yangcheon": {
+        "name": "양천구청",
+        "type": "고시/공고",
+        "instance": YangcheonCrawler(),
+        "url": "https://www.yangcheon.go.kr"
+    },
+    "ydp": {
+        "name": "영등포구청",
+        "type": "고시공고",
+        "instance": YdpCrawler(),
+        "url": "https://www.ydp.go.kr"
+    },
+    "yongsan": {
+        "name": "용산구청",
+        "type": "고시공고",
+        "instance": YongsanCrawler(),
+        "url": "https://www.yongsan.go.kr"
+    },
+    "eunpyeong_gosi": {
+        "name": "은평구청",
+        "type": "고시/공고",
+        "instance": EunpyeongGosiCrawler(),
+        "url": "https://www.ep.go.kr"
+    },
+    "eunpyeong_bid": {
+        "name": "은평구청",
+        "type": "입찰공고",
+        "instance": EunpyeongBidCrawler(),
+        "url": "https://www.ep.go.kr"
+    },
+    "jongno": {
+        "name": "종로구청",
+        "type": "고시공고",
+        "instance": JongnoCrawler(),
+        "url": "https://www.jongno.go.kr"
+    },
+    "junggu": {
+        "name": "중구청",
+        "type": "고시공고",
+        "instance": JungguCrawler(),
+        "url": "https://www.junggu.seoul.kr"
+    },
+    "jungnang": {
+        "name": "중랑구청",
+        "type": "고시공고",
+        "instance": JungnangCrawler(),
+        "url": "https://www.jungnang.go.kr"
+    },
+    # 서울 자치구 + 전남 화순 추가 (17개)
+    "hwasun": {
+        "name": "화순군청",
+        "type": "공지사항",
+        "instance": HwasunCrawler(),
+        "url": "https://www.hwasun.go.kr"
+    },
+    "gangnam": {
+        "name": "강남구청",
+        "type": "고시/공고",
+        "instance": GangnamCrawler(),
+        "url": "https://www.gangnam.go.kr"
+    },
+    "gangdong": {
+        "name": "강동구청",
+        "type": "고시/공고",
+        "instance": GangdongCrawler(),
+        "url": "https://www.gangdong.go.kr"
+    },
+    "gangbuk": {
+        "name": "강북구청",
+        "type": "고시/공고",
+        "instance": GangbukCrawler(),
+        "url": "https://www.gangbuk.go.kr"
+    },
+    "gangseo_gosi": {
+        "name": "강서구청",
+        "type": "고시공고",
+        "instance": GangseoGosiCrawler(),
+        "url": "https://www.gangseo.seoul.kr"
+    },
+    "gangseo_bid": {
+        "name": "강서구청",
+        "type": "입찰공고",
+        "instance": GangseoBidCrawler(),
+        "url": "https://www.gangseo.seoul.kr"
+    },
+    "gwanak_gosi": {
+        "name": "관악구청",
+        "type": "고시공고",
+        "instance": GwanakGosiCrawler(),
+        "url": "https://www.gwanak.go.kr"
+    },
+    "gwanak_bid": {
+        "name": "관악구청",
+        "type": "입찰공고",
+        "instance": GwanakBidCrawler(),
+        "url": "https://www.gwanak.go.kr"
+    },
+    "gwangjin": {
+        "name": "광진구청",
+        "type": "고시공고",
+        "instance": GwangjinCrawler(),
+        "url": "https://www.gwangjin.go.kr"
+    },
+    "guro": {
+        "name": "구로구청",
+        "type": "고시공고",
+        "instance": GuroCrawler(),
+        "url": "https://www.guro.go.kr"
+    },
+    "geumcheon_gosi": {
+        "name": "금천구청",
+        "type": "고시공고",
+        "instance": GeumcheonGosiCrawler(),
+        "url": "https://www.geumcheon.go.kr"
+    },
+    "geumcheon_bid": {
+        "name": "금천구청",
+        "type": "입찰공고",
+        "instance": GeumcheonBidCrawler(),
+        "url": "https://www.geumcheon.go.kr"
+    },
+    "nowon": {
+        "name": "노원구청",
+        "type": "고시공고",
+        "instance": NowonCrawler(),
+        "url": "https://www.nowon.kr"
+    },
+    "dobong": {
+        "name": "도봉구청",
+        "type": "고시공고",
+        "instance": DobongCrawler(),
+        "url": "https://www.dobong.go.kr"
+    },
+    "ddm_gosi": {
+        "name": "동대문구청",
+        "type": "고시공고",
+        "instance": DdmGosiCrawler(),
+        "url": "https://www.ddm.go.kr"
+    },
+    "ddm_bid": {
+        "name": "동대문구청",
+        "type": "입찰공고",
+        "instance": DdmBidCrawler(),
+        "url": "https://www.ddm.go.kr"
+    },
+    "dongjak": {
+        "name": "동작구청",
+        "type": "고시공고",
+        "instance": DongjakCrawler(),
+        "url": "https://www.dongjak.go.kr"
     },
 }
 
