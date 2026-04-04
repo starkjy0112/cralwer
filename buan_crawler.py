@@ -1,0 +1,150 @@
+# -*- coding: utf-8 -*-
+"""
+부안군청 고시공고 크롤러
+https://www.buan.go.kr/board/list.buan?boardId=BBS_0000054&menuCd=DOM_000000103001003000&contentsSid=84
+GET 기반, table.bbs_list_t, 10건/페이지, startPage 파라미터
+컬럼: 글번호, 제목(link), 첨부파일(link), 작성자, 작성일(YY.MM.DD)
+"""
+import math
+import re
+import requests
+from requests.adapters import HTTPAdapter
+from bs4 import BeautifulSoup
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+
+BASE_URL = "https://www.buan.go.kr"
+LIST_URL = f"{BASE_URL}/board/list.buan"
+BOARD_ID = "BBS_0000054"
+MENU_CD = "DOM_000000103001003000"
+CONTENTS_SID = "84"
+PAGE_SIZE = 10
+ORGANIZATION_NAME = "부안군청"
+
+
+class BuanCrawler:
+    """부안군청 고시공고 크롤러"""
+
+    def __init__(self):
+        self.session = requests.Session()
+        self.session.headers.update({
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            ),
+        })
+        adapter = HTTPAdapter(pool_connections=1, pool_maxsize=20)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
+
+    @staticmethod
+    def _normalize_date(d):
+        """YY.MM.DD -> YYYY-MM-DD"""
+        d = d.strip()
+        m = re.match(r'(\d{2})\.(\d{2})\.(\d{2})', d)
+        if m:
+            return f"20{m.group(1)}-{m.group(2)}-{m.group(3)}"
+        m2 = re.match(r'(\d{4})[-./](\d{2})[-./](\d{2})', d)
+        if m2:
+            return f"{m2.group(1)}-{m2.group(2)}-{m2.group(3)}"
+        return d
+
+    def _fetch_page(self, keyword, page):
+        params = {
+            "boardId": BOARD_ID,
+            "menuCd": MENU_CD,
+            "contentsSid": CONTENTS_SID,
+            "searchType": "DATA_TITLE",
+            "startPage": str(page),
+        }
+        if keyword:
+            params["keyword"] = keyword
+
+        resp = self.session.get(LIST_URL, params=params, timeout=15, verify=False)
+        resp.encoding = "utf-8"
+        soup = BeautifulSoup(resp.text, "lxml")
+
+        total_count = 0
+        m = re.search(r'총\s*(\d[\d,]*)\s*건', soup.get_text())
+        if m:
+            total_count = int(m.group(1).replace(",", ""))
+
+        items = []
+        table = soup.select_one("table.bbs_list_t") or soup.select_one("table.list01")
+        if not table:
+            return items, total_count
+
+        for tr in table.find_all("tr"):
+            tds = tr.find_all("td")
+            if len(tds) < 5:
+                continue
+
+            number = tds[0].get_text(strip=True)
+
+            a_tag = tds[1].find("a")
+            if not a_tag:
+                continue
+            title = a_tag.get_text(strip=True)
+            href = a_tag.get("href", "")
+            if href.startswith("/"):
+                detail_url = f"{BASE_URL}{href}"
+            else:
+                detail_url = href
+
+            # tds[2] = 첨부, tds[3] = 작성자, tds[4] = 작성일
+            date_str = self._normalize_date(tds[4].get_text(strip=True))
+
+            items.append({
+                "number": number,
+                "title": title,
+                "date": date_str,
+                "url": detail_url,
+                "organization": ORGANIZATION_NAME,
+            })
+
+        return items, total_count
+
+    WORKERS = 20
+
+    def search(self, keyword="", max_pages=10):
+        first_items, total_count = self._fetch_page(keyword, 1)
+        total_pages = max(1, math.ceil(total_count / PAGE_SIZE))
+        actual_pages = min(total_pages, max_pages)
+        print(f"  [Page 1/{actual_pages}] {len(first_items)}건 수집 (전체 {total_count}건)")
+
+        if actual_pages <= 1:
+            all_items = first_items
+        else:
+            page_results = {1: first_items}
+            with ThreadPoolExecutor(max_workers=self.WORKERS) as executor:
+                futures = {
+                    executor.submit(self._fetch_page, keyword, p): p
+                    for p in range(2, actual_pages + 1)
+                }
+                for future in as_completed(futures):
+                    p = futures[future]
+                    try:
+                        items, _ = future.result()
+                        if items:
+                            page_results[p] = items
+                    except Exception:
+                        pass
+
+            all_items = []
+            for p in sorted(page_results.keys()):
+                all_items.extend(page_results[p])
+
+        all_items.sort(key=lambda x: x["date"], reverse=True)
+        print(f"[{ORGANIZATION_NAME} 고시공고] 완료: 총 {len(all_items)}건")
+        return all_items
+
+
+if __name__ == "__main__":
+    import urllib3
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    crawler = BuanCrawler()
+    print("=== '공고' 검색 ===")
+    results = crawler.search("공고", max_pages=1)
+    for r in results[:3]:
+        print(f"  [{r['date']}] {r['title'][:50]}")

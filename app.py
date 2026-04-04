@@ -306,6 +306,48 @@ from chilgok_crawler import ChilgokCrawler
 from pohang_gosi_crawler import PohangGosiCrawler
 from pohang_bid_crawler import PohangBidCrawler
 
+# 전라북도 시군 크롤러 (14개)
+from gochang_crawler import GochangCrawler
+from gunsan_crawler import GunsanCrawler
+from gimje_crawler import GimjeCrawler
+from namwon_crawler import NamwonCrawler
+from muju_crawler import MujuCrawler
+from buan_crawler import BuanCrawler
+from sunchang_crawler import SunchangCrawler
+from wanju_crawler import WanjuCrawler
+from iksan_crawler import IksanCrawler
+from imsil_crawler import ImsilCrawler
+from jangsu_crawler import JangsuCrawler
+from jeonju_crawler import JeonjuCrawler
+from jeongeup_crawler import JeongeupCrawler
+from jinan_crawler import JinanCrawler
+
+# 전라남도 시군 크롤러 (24개)
+from gangjin_crawler import GangjinCrawler
+from gwangyang_crawler import GwangyangCrawler
+from goheung_crawler import GoheungCrawler
+from gokseong_crawler import GokseongCrawler
+from gurye_crawler import GuryeCrawler
+from naju_crawler import NajuCrawler
+from damyang_crawler import DamyangCrawler
+from mokpo_crawler import MokpoCrawler
+from muan_crawler import MuanCrawler
+from boseong_crawler import BoseongCrawler
+from suncheon_crawler import SuncheonCrawler
+from shinan_crawler import ShinanCrawler
+from yeosu_crawler import YeosuCrawler
+from yeonggwang_crawler import YeonggwangCrawler
+from yeongam_crawler import YeongamCrawler
+from wando_crawler import WandoCrawler
+from jangseong_crawler import JangseongCrawler
+from jangheung_crawler import JangheungCrawler
+from jindo_gosi_crawler import JindoGosiCrawler
+from jindo_bid_crawler import JindoBidCrawler
+from hampyeong_gosi_crawler import HampyeongGosiCrawler
+from hampyeong_notice_crawler import HampyeongNoticeCrawler
+from haenam_gosi_crawler import HaenamGosiCrawler
+from haenam_notice_crawler import HaenamNoticeCrawler
+
 app = Flask(__name__)
 
 
@@ -1935,6 +1977,236 @@ CRAWLERS = {
         "type": "입찰공고",
         "instance": PohangBidCrawler(),
         "url": "https://www.pohang.go.kr"
+    },
+    # 전라북도 시군 크롤러
+    "gochang": {
+        "name": "고창군청",
+        "type": "고시공고",
+        "instance": GochangCrawler(),
+        "url": "https://www.gochang.go.kr"
+    },
+    "gunsan": {
+        "name": "군산시청",
+        "type": "고시공고",
+        "instance": GunsanCrawler(),
+        "url": "https://eminwon.gunsan.go.kr"
+    },
+    "gimje": {
+        "name": "김제시청",
+        "type": "고시공고",
+        "instance": GimjeCrawler(),
+        "url": "https://www.gimje.go.kr"
+    },
+    "namwon": {
+        "name": "남원시청",
+        "type": "고시공고",
+        "instance": NamwonCrawler(),
+        "url": "https://www.namwon.go.kr"
+    },
+    "muju": {
+        "name": "무주군청",
+        "type": "고시공고",
+        "instance": MujuCrawler(),
+        "url": "https://www.muju.go.kr"
+    },
+    "buan": {
+        "name": "부안군청",
+        "type": "고시공고",
+        "instance": BuanCrawler(),
+        "url": "https://www.buan.go.kr"
+    },
+    "sunchang": {
+        "name": "순창군청",
+        "type": "고시공고",
+        "instance": SunchangCrawler(),
+        "url": "http://eminwon.sunchang.go.kr"
+    },
+    "wanju": {
+        "name": "완주군청",
+        "type": "고시공고",
+        "instance": WanjuCrawler(),
+        "url": "https://www.wanju.go.kr"
+    },
+    "iksan": {
+        "name": "익산시청",
+        "type": "고시공고",
+        "instance": IksanCrawler(),
+        "url": "https://eminwon.iksan.go.kr"
+    },
+    "imsil": {
+        "name": "임실군청",
+        "type": "고시공고",
+        "instance": ImsilCrawler(),
+        "url": "https://www.imsil.go.kr"
+    },
+    "jangsu": {
+        "name": "장수군청",
+        "type": "고시공고",
+        "instance": JangsuCrawler(),
+        "url": "https://www.jangsu.go.kr"
+    },
+    "jeonju": {
+        "name": "전주시청",
+        "type": "고시공고",
+        "instance": JeonjuCrawler(),
+        "url": "https://www.jeonju.go.kr"
+    },
+    "jeongeup": {
+        "name": "정읍시청",
+        "type": "고시공고",
+        "instance": JeongeupCrawler(),
+        "url": "http://eminwon.jeongeup.go.kr"
+    },
+    "jinan": {
+        "name": "진안군청",
+        "type": "고시공고",
+        "instance": JinanCrawler(),
+        "url": "https://www.jinan.go.kr"
+    },
+    # 전라남도 시군 크롤러 (24개)
+    "gangjin": {
+        "name": "강진군청",
+        "type": "고시/공고",
+        "instance": GangjinCrawler(),
+        "url": "https://www.gangjin.go.kr"
+    },
+    "gwangyang": {
+        "name": "광양시청",
+        "type": "고시/공고",
+        "instance": GwangyangCrawler(),
+        "url": "https://gwangyang.go.kr"
+    },
+    "goheung": {
+        "name": "고흥군청",
+        "type": "고시/공고",
+        "instance": GoheungCrawler(),
+        "url": "https://www.goheung.go.kr"
+    },
+    "gokseong": {
+        "name": "곡성군청",
+        "type": "고시/공고",
+        "instance": GokseongCrawler(),
+        "url": "https://www.gokseong.go.kr"
+    },
+    "gurye": {
+        "name": "구례군청",
+        "type": "고시/공고",
+        "instance": GuryeCrawler(),
+        "url": "https://www.gurye.go.kr"
+    },
+    "naju": {
+        "name": "나주시청",
+        "type": "고시/공고",
+        "instance": NajuCrawler(),
+        "url": "https://www.naju.go.kr"
+    },
+    "damyang": {
+        "name": "담양군청",
+        "type": "고시/공고",
+        "instance": DamyangCrawler(),
+        "url": "https://www.damyang.go.kr"
+    },
+    "mokpo": {
+        "name": "목포시청",
+        "type": "공고",
+        "instance": MokpoCrawler(),
+        "url": "https://www.mokpo.go.kr"
+    },
+    "muan": {
+        "name": "무안군청",
+        "type": "공고",
+        "instance": MuanCrawler(),
+        "url": "https://www.muan.go.kr"
+    },
+    "boseong": {
+        "name": "보성군청",
+        "type": "공고",
+        "instance": BoseongCrawler(),
+        "url": "https://www.boseong.go.kr"
+    },
+    "suncheon": {
+        "name": "순천시청",
+        "type": "고시/공고",
+        "instance": SuncheonCrawler(),
+        "url": "http://www.suncheon.go.kr"
+    },
+    "shinan": {
+        "name": "신안군청",
+        "type": "공고",
+        "instance": ShinanCrawler(),
+        "url": "https://www.shinan.go.kr"
+    },
+    "yeosu": {
+        "name": "여수시청",
+        "type": "통합검색",
+        "instance": YeosuCrawler(),
+        "url": "https://www.yeosu.go.kr"
+    },
+    "yeonggwang": {
+        "name": "영광군청",
+        "type": "고시공고",
+        "instance": YeonggwangCrawler(),
+        "url": "https://www.yeonggwang.go.kr"
+    },
+    "yeongam": {
+        "name": "영암군청",
+        "type": "공고",
+        "instance": YeongamCrawler(),
+        "url": "https://www.yeongam.go.kr"
+    },
+    "wando": {
+        "name": "완도군청",
+        "type": "고시/공고",
+        "instance": WandoCrawler(),
+        "url": "https://www.wando.go.kr"
+    },
+    "jangseong": {
+        "name": "장성군청",
+        "type": "공고",
+        "instance": JangseongCrawler(),
+        "url": "https://www.jangseong.go.kr"
+    },
+    "jangheung": {
+        "name": "장흥군청",
+        "type": "통합검색",
+        "instance": JangheungCrawler(),
+        "url": "https://www.jangheung.go.kr"
+    },
+    "jindo_gosi": {
+        "name": "진도군청",
+        "type": "고시/공고",
+        "instance": JindoGosiCrawler(),
+        "url": "https://www.jindo.go.kr"
+    },
+    "jindo_bid": {
+        "name": "진도군청",
+        "type": "입찰공고",
+        "instance": JindoBidCrawler(),
+        "url": "https://www.jindo.go.kr"
+    },
+    "hampyeong_gosi": {
+        "name": "함평군청",
+        "type": "고시공고",
+        "instance": HampyeongGosiCrawler(),
+        "url": "https://www.hampyeong.go.kr"
+    },
+    "hampyeong_notice": {
+        "name": "함평군청",
+        "type": "공지사항",
+        "instance": HampyeongNoticeCrawler(),
+        "url": "https://www.hampyeong.go.kr"
+    },
+    "haenam_gosi": {
+        "name": "해남군청",
+        "type": "고시공고",
+        "instance": HaenamGosiCrawler(),
+        "url": "https://www.haenam.go.kr"
+    },
+    "haenam_notice": {
+        "name": "해남군청",
+        "type": "고시공고(게시판)",
+        "instance": HaenamNoticeCrawler(),
+        "url": "https://www.haenam.go.kr"
     },
 }
 
