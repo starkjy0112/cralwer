@@ -95,7 +95,7 @@ class DobongCrawler:
                 else:
                     detail_url = href
 
-                date = tds[5].get_text(strip=True) if len(tds) > 5 else ""
+                date = tds[5].get_text(strip=True).replace(".", "-") if len(tds) > 5 else ""
 
                 items.append({
                     "number": number,

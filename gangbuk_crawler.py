@@ -99,7 +99,8 @@ class GangbukCrawler:
                 detail_url = BASE_URL + href if href and not href.startswith("http") else href
 
                 # 날짜 열 (마지막 열 or 4번째)
-                date = tds[-1].get_text(strip=True) if len(tds) >= 5 else ""
+                raw_date = tds[-1].get_text(strip=True) if len(tds) >= 5 else ""
+                date = raw_date.split("~")[0].strip().replace(".", "-") if raw_date else ""
                 # 날짜 열이 숫자가 아닌 경우 다른 열 탐색
                 if not re.search(r"\d{4}", date):
                     for td in reversed(tds):
