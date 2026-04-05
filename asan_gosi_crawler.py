@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 아산시청 고시공고 크롤러
-https://www.asan.go.kr/main/cms/?no=257
-eminwon iframe (OfrNotAncmtLSub.jsp -> OfrAction.do), POST, 10건/페이지
+https://www.asan.go.kr/main/cms/?no=483
+eminwon iframe (OfrNotAncmtLSub.jsp -> OfrAction.do), POST, not_ancmt_se_code=01,04,06,07, 10건/페이지
 """
 import math
 import re
@@ -16,6 +16,7 @@ EMINWON_BASE = "https://eminwon.asan.go.kr"
 IFRAME_URL = f"{EMINWON_BASE}/emwp/jsp/ofr/OfrNotAncmtLSub.jsp"
 ACTION_URL = f"{EMINWON_BASE}/emwp/gov/mogaha/ntis/web/ofr/action/OfrAction.do"
 DETAIL_URL = f"{EMINWON_BASE}/emwp/jsp/ofr/OfrNotAncmtVSub.jsp"
+SE_CODE = "01,04,06,07"
 PAGE_SIZE = 10
 ORGANIZATION_NAME = "아산시청"
 
@@ -46,12 +47,12 @@ class AsanGosiCrawler:
             self.session.get(
                 IFRAME_URL,
                 params={
-                    "not_ancmt_se_code": "",
+                    "not_ancmt_se_code": SE_CODE,
                     "list_gubun": "A",
                     "ofr_pageSize": str(PAGE_SIZE),
                     "epcCheck": "Y",
                 },
-                timeout=60
+                timeout=15
             )
         except Exception:
             pass
@@ -69,8 +70,8 @@ class AsanGosiCrawler:
             "homepage_pbs_yn": "Y",
             "subCheck": "Y",
             "ofr_pageSize": str(PAGE_SIZE),
-            "not_ancmt_se_code": "",
-            "title": "",
+            "not_ancmt_se_code": SE_CODE,
+            "title": "고시공고",
             "countYn": "Y",
             "list_gubun": "A",
             "not_ancmt_sj": keyword if keyword else "",
@@ -105,7 +106,10 @@ class AsanGosiCrawler:
                     onclick = link.get("onclick", "") or link.get("href", "")
                     m = re.search(r"searchDetail\(['\"]?(\d+)['\"]?\)", onclick)
                     if m:
-                        detail_url = f"{DETAIL_URL}?not_ancmt_mgt_no={m.group(1)}"
+                        detail_url = (
+                            f"{DETAIL_URL}?not_ancmt_se_code={SE_CODE}"
+                            f"&not_ancmt_mgt_no={m.group(1)}"
+                        )
                 items.append({
                     "number": number,
                     "title": f"[{gosi_no}] {title_text}" if gosi_no else title_text,
@@ -131,7 +135,10 @@ class AsanGosiCrawler:
                 onclick = link.get("onclick", "") or link.get("href", "")
                 m = re.search(r"searchDetail\(['\"]?(\d+)['\"]?\)", onclick)
                 if m:
-                    detail_url = f"{DETAIL_URL}?not_ancmt_mgt_no={m.group(1)}"
+                    detail_url = (
+                        f"{DETAIL_URL}?not_ancmt_se_code={SE_CODE}"
+                        f"&not_ancmt_mgt_no={m.group(1)}"
+                    )
             items.append({
                 "number": number,
                 "title": f"[{gosi_no}] {title_text}" if gosi_no else title_text,
@@ -146,49 +153,34 @@ class AsanGosiCrawler:
 
     def search(self, keyword="", max_pages=10):
         first_items, total_count = self._fetch_page(keyword, 1)
-        # eminwon은 total_count가 검색과 무관하게 전체 건수 반환
-        # 키워드 있으면 순차적으로 빈 페이지 나올 때까지 가져옴
-        if keyword:
-            all_items = list(first_items)
-            print(f"  [Page 1] {len(first_items)}건 수집 (전체 {total_count}건)")
-            page = 2
-            empty_count = 0
-            while page <= max_pages and empty_count < 3:
-                items, _ = self._fetch_page(keyword, page)
-                if not items:
-                    empty_count += 1
-                else:
-                    empty_count = 0
-                    all_items.extend(items)
-                page += 1
+        total_pages = max(1, math.ceil(total_count / PAGE_SIZE))
+        actual_pages = min(total_pages, max_pages)
+        print(f"  [Page 1/{actual_pages}] {len(first_items)}건 수집 (전체 {total_count}건)")
+
+        if actual_pages <= 1:
+            all_items = first_items
         else:
-            total_pages = max(1, math.ceil(total_count / PAGE_SIZE))
-            actual_pages = min(total_pages, max_pages)
-            print(f"  [Page 1/{actual_pages}] {len(first_items)}건 수집 (전체 {total_count}건)")
-            if actual_pages <= 1:
-                all_items = first_items
-            else:
-                page_results = {1: first_items}
-                with ThreadPoolExecutor(max_workers=self.WORKERS) as executor:
-                    futures = {
-                        executor.submit(self._fetch_page, keyword, p): p
-                        for p in range(2, actual_pages + 1)
-                    }
-                    for future in as_completed(futures):
-                        p = futures[future]
-                        try:
-                            items, _ = future.result()
-                            if items:
-                                page_results[p] = items
-                        except Exception:
-                            pass
+            page_results = {1: first_items}
+            with ThreadPoolExecutor(max_workers=self.WORKERS) as executor:
+                futures = {
+                    executor.submit(self._fetch_page, keyword, p): p
+                    for p in range(2, actual_pages + 1)
+                }
+                for future in as_completed(futures):
+                    p = futures[future]
+                    try:
+                        items, _ = future.result()
+                        if items:
+                            page_results[p] = items
+                    except Exception:
+                        pass
 
             all_items = []
             for p in sorted(page_results.keys()):
                 all_items.extend(page_results[p])
 
         all_items.sort(key=lambda x: x["date"], reverse=True)
-        print(f"[{ORGANIZATION_NAME} 고시공고] 완료: 총 {len(all_items)}건")
+        print(f"[{ORGANIZATION_NAME} 입찰] 완료: 총 {len(all_items)}건")
         return all_items
 
 
