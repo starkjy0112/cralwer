@@ -42,6 +42,7 @@ class SdmCrawler:
             "cp": str(page),
         }
         if keyword:
+            data["keycol"] = "title"
             data["keyword"] = keyword
 
         resp = self.session.post(LIST_URL, data=data, timeout=15)

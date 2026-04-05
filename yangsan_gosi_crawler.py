@@ -37,12 +37,15 @@ class YangsanGosiCrawler:
         self.session.mount("https://", adapter)
         self.session.mount("http://", adapter)
 
-    def _fetch_page(self, page):
+    def _fetch_page(self, keyword, page):
         data = {
             "page": str(page),
             "pageSize": str(PAGE_SIZE),
             "seCode": SE_CODE,
         }
+        if keyword:
+            data["searchType"] = "tit"
+            data["searchTxt"] = keyword
         resp = self.session.post(
             f"{LIST_URL}?mid={MID}",
             data=data, timeout=15, verify=False,
@@ -97,7 +100,7 @@ class YangsanGosiCrawler:
     WORKERS = 20
 
     def search(self, keyword="", max_pages=10):
-        first_items, total_count = self._fetch_page(1)
+        first_items, total_count = self._fetch_page(keyword, 1)
         total_pages = max(1, math.ceil(total_count / PAGE_SIZE))
         actual_pages = min(total_pages, max_pages)
         print(f"  [Page 1/{actual_pages}] {len(first_items)}건 수집 (전체 {total_count}건)")
@@ -108,7 +111,7 @@ class YangsanGosiCrawler:
             page_results = {1: first_items}
             with ThreadPoolExecutor(max_workers=self.WORKERS) as executor:
                 futures = {
-                    executor.submit(self._fetch_page, p): p
+                    executor.submit(self._fetch_page, keyword, p): p
                     for p in range(2, actual_pages + 1)
                 }
                 for future in as_completed(futures):
@@ -123,10 +126,6 @@ class YangsanGosiCrawler:
             all_items = []
             for p in sorted(page_results.keys()):
                 all_items.extend(page_results[p])
-
-        # 클라이언트 사이드 키워드 필터링
-        if keyword:
-            all_items = [item for item in all_items if keyword in item["title"]]
 
         all_items.sort(key=lambda x: x["date"], reverse=True)
         print(f"[{ORGANIZATION_NAME} 고시/공고] 완료: 총 {len(all_items)}건")
