@@ -48,7 +48,7 @@ class AsanGosiCrawler:
                 IFRAME_URL,
                 params={
                     "not_ancmt_se_code": SE_CODE,
-                    "list_gubun": "A",
+                    "list_gubun": "",
                     "ofr_pageSize": str(PAGE_SIZE),
                     "epcCheck": "Y",
                 },
@@ -73,11 +73,13 @@ class AsanGosiCrawler:
             "not_ancmt_se_code": SE_CODE,
             "title": "고시공고",
             "countYn": "Y",
-            "list_gubun": "A",
+            "list_gubun": "",
+            "Key": "B_Subject",
+            "temp": keyword if keyword else "",
             "not_ancmt_sj": keyword if keyword else "",
             "not_ancmt_cn": "",
             "dept_nm": "",
-            "temp": "",
+            "epcCheck": "Y",
         }
 
         resp = self.session.post(ACTION_URL, data=data, timeout=30)
