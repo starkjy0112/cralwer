@@ -44,6 +44,7 @@ class JongnoCrawler:
             "pageIndex": str(page),
         }
         if keyword:
+            params["searchCnd"] = "0"
             params["searchWrd"] = keyword
 
         resp = self.session.get(LIST_URL, params=params, timeout=15)

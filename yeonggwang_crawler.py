@@ -42,6 +42,7 @@ class YeonggwangCrawler:
             "page": str(page),
         }
         if keyword:
+            params["sc_key"] = "subject"
             params["sc_word"] = keyword
 
         resp = self.session.get(LIST_URL, params=params, timeout=15)

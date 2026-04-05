@@ -42,8 +42,8 @@ class GwanakGosiCrawler:
             "curPage": str(page),
         }
         if keyword:
-            params["searchType"] = "sj"
-            params["searchValue"] = keyword
+            params["tgtTypeCd"] = "NOT_ANCMT_SJ"
+            params["searchKey"] = keyword
 
         resp = self.session.get(LIST_URL, params=params, timeout=15)
         resp.encoding = "utf-8"

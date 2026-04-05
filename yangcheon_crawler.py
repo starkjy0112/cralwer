@@ -39,6 +39,7 @@ class YangcheonCrawler:
             "pageIndex": str(page),
         }
         if keyword:
+            params["searchCondition"] = "subject"
             params["searchKeyword"] = keyword
 
         resp = self.session.get(LIST_URL, params=params, timeout=15)

@@ -42,7 +42,7 @@ class GunwiGosiCrawler:
             "pageNo": str(page),
         }
         if keyword:
-            params["srchColumn"] = "bod_title"
+            params["srchColumn"] = "title"
             params["srchKwd"] = keyword
 
         resp = self.session.get(LIST_URL, params=params, timeout=15)

@@ -41,8 +41,8 @@ class GwangyangCrawler:
             "nPage": str(page),
         }
         if keyword:
-            params["searchCondition"] = "title"
-            params["searchKeyword"] = keyword
+            params["keyField"] = "T"
+            params["keyWord"] = keyword
 
         resp = self.session.get(LIST_URL, params=params, timeout=15)
         resp.encoding = "utf-8"

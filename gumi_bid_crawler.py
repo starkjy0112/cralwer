@@ -42,8 +42,8 @@ class GumiBidCrawler:
             "seCode": "02",
         }
         if keyword:
-            data["searchCondition"] = "notAncmtSj"
-            data["searchKeyword"] = keyword
+            data["searchType"] = "tit"
+            data["searchTxt"] = keyword
 
         resp = self.session.post(
             f"{LIST_URL}?seCode=02&mid=0401050000", data=data, timeout=15

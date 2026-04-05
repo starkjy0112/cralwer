@@ -37,6 +37,7 @@ class SuncheonCrawler:
     def _fetch_page(self, keyword, page):
         params = {"pageIndex": str(page)}
         if keyword:
+            params["searchCondition"] = "title"
             params["searchKeyword"] = keyword
         resp = self.session.get(LIST_URL, params=params, timeout=15)
         resp.encoding = "utf-8"

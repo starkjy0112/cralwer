@@ -36,15 +36,15 @@ class GyeongsanGosiCrawler:
         self.session.mount("http://", adapter)
 
     def _fetch_page(self, keyword, page):
-        data = {
+        params = {
             "mnu_uid": "2160",
             "pageNo": str(page),
         }
         if keyword:
-            data["srchColumn"] = "bod_title"
-            data["srchKwd"] = keyword
+            params["srchColumn"] = "bod_title"
+            params["srchKwd"] = keyword
 
-        resp = self.session.post(LIST_URL, data=data, params={"mnu_uid": "2160"}, timeout=15)
+        resp = self.session.get(LIST_URL, params=params, timeout=15)
         resp.encoding = "utf-8"
         soup = BeautifulSoup(resp.text, "lxml")
 

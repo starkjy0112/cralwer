@@ -43,7 +43,7 @@ class YeongcheonBidCrawler:
             "page": str(page),
         }
         if keyword:
-            params["searchType"] = "tit"
+            params["searchType"] = "subject"
             params["searchTxt"] = keyword
 
         resp = self.session.get(LIST_URL, params=params, timeout=15)

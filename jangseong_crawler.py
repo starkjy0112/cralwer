@@ -37,7 +37,8 @@ class JangseongCrawler:
     def _fetch_page(self, keyword, page):
         params = {"page": str(page)}
         if keyword:
-            params["search"] = keyword
+            params["search"] = "search_title"
+            params["not_ancmt_sj"] = keyword
         resp = self.session.get(LIST_URL, params=params, timeout=15)
         resp.encoding = "utf-8"
         soup = BeautifulSoup(resp.text, "lxml")

@@ -41,8 +41,8 @@ class PohangGosiCrawler:
             "seCode": "01",
         }
         if keyword:
-            data["searchCondition"] = "notAncmtSj"
-            data["searchKeyword"] = keyword
+            data["searchType"] = "tit"
+            data["searchTxt"] = keyword
 
         resp = self.session.post(
             f"{LIST_URL}?mid={MID}", data=data, timeout=15

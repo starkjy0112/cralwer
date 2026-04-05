@@ -42,8 +42,8 @@ class GangnamCrawler:
             "pageIndex": str(page),
         }
         if keyword:
-            params["searchCnd"] = "SJ"
-            params["searchWrd"] = keyword
+            params["keyfield"] = "BNI_MAIN_TITLE"
+            params["keyword"] = keyword
 
         resp = self.session.get(LIST_URL, params=params, timeout=15)
         resp.encoding = "utf-8"

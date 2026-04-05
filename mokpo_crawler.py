@@ -38,6 +38,7 @@ class MokpoCrawler:
     def _fetch_page(self, keyword, page):
         params = {"page": str(page)}
         if keyword:
+            params["search_type"] = "title"
             params["search_word"] = keyword
 
         resp = self.session.get(LIST_URL, params=params, timeout=15)

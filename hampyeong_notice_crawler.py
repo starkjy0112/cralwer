@@ -41,6 +41,7 @@ class HampyeongNoticeCrawler:
             "recordCnt": "10",
         }
         if keyword:
+            params["searchTy"] = "T"
             params["searchQuery"] = keyword
 
         resp = self.session.get(LIST_URL, params=params, timeout=15)

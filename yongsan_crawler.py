@@ -42,6 +42,7 @@ class YongsanCrawler:
             "pageUnit": str(PAGE_SIZE),
         }
         if keyword:
+            params["searchCnd"] = "1"
             params["searchWrd"] = keyword
 
         resp = self.session.get(LIST_URL, params=params, timeout=15)

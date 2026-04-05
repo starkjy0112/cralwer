@@ -36,6 +36,7 @@ class JindoBidCrawler:
     def _fetch_page(self, keyword, page):
         params = {"m": "26", "pageIndex": str(page)}
         if keyword:
+            params["searchCondition"] = "notAncmtSj"
             params["searchKeyword"] = keyword
         resp = self.session.get(LIST_URL, params=params, timeout=30)
         resp.encoding = "utf-8"

@@ -41,7 +41,8 @@ class DobongCrawler:
             "intPage": str(page),
         }
         if keyword:
-            params["txtSearch"] = keyword
+            params["strSearchType"] = "1"
+            params["strSearchKeyword"] = keyword
 
         resp = self.session.get(LIST_URL, params=params, timeout=15)
         resp.encoding = "utf-8"

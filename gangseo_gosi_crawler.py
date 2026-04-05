@@ -41,7 +41,7 @@ class GangseoGosiCrawler:
             "curPage": str(page),
         }
         if keyword:
-            params["srchKey"] = "srchAll"
+            params["srchKey"] = "sj"
             params["srchText"] = keyword
 
         resp = self.session.get(LIST_URL, params=params, timeout=15)

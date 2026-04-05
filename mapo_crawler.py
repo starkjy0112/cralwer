@@ -40,7 +40,7 @@ class MapoCrawler:
             "pageIndex": str(page),
         }
         if keyword:
-            params["searchKeyword"] = keyword
+            params["sv"] = keyword
 
         resp = self.session.get(LIST_URL, params=params, timeout=15)
         resp.encoding = "utf-8"

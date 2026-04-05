@@ -46,7 +46,7 @@ class NowonCrawler:
             "q_pClCode": "0",
         }
         if keyword:
-            params["q_searchKeyTy"] = "sj__1003"
+            params["q_searchKeyTy"] = "sj___1002"
             params["q_searchVal"] = keyword
 
         resp = self.session.get(LIST_URL, params=params, timeout=15)

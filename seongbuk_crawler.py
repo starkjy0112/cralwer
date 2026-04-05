@@ -42,6 +42,7 @@ class SeongbukCrawler:
             "searchCnd": "all",
         }
         if keyword:
+            params["searchCnd2"] = "notAncmtSj"
             params["searchKrwd"] = keyword
         if hasattr(self, '_bgnde') and self._bgnde:
             params["bgnde"] = self._bgnde

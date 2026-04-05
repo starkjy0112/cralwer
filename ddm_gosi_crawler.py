@@ -46,8 +46,8 @@ class DdmGosiCrawler:
             "pageUnit": str(PAGE_SIZE),
         }
         if keyword:
-            params["searchCnd"] = "all"
-            params["searchWrd"] = keyword
+            params["searchCnd"] = "notAncmtSj"
+            params["searchKrwd"] = keyword
 
         resp = self.session.get(LIST_URL, params=params, timeout=15)
         resp.encoding = "utf-8"

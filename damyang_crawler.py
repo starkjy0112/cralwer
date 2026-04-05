@@ -46,8 +46,8 @@ class DamyangCrawler:
             "pageCnt": str(PAGE_SIZE),
         }
         if keyword:
-            params["searchField"] = "sch_sco1"
-            params["searchWord"] = keyword
+            params["searchKey"] = "sch_sco1"
+            params["searchVal"] = keyword
 
         resp = self.session.get(API_URL, params=params, timeout=15)
         data = resp.json()
@@ -70,6 +70,10 @@ class DamyangCrawler:
             title = str(item.get("col3", "")).strip()
             dept = str(item.get("col4", "")).strip()
             date = str(item.get("col5", "")).strip()
+
+            # 서버 검색이 미지원이므로 클라이언트 필터링
+            if keyword and keyword not in title:
+                continue
 
             detail_link = f"{DETAIL_URL}{mgt_no}" if mgt_no else BASE_URL
 

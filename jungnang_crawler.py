@@ -40,6 +40,7 @@ class JungnangCrawler:
             "pageIndex": str(page),
         }
         if keyword:
+            params["searchCnd"] = "1"
             params["searchWrd"] = keyword
         if hasattr(self, '_sdate') and self._sdate:
             params["sdate"] = self._sdate

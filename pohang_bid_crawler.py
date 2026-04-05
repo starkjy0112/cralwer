@@ -41,8 +41,8 @@ class PohangBidCrawler:
             "seCode": "02",
         }
         if keyword:
-            data["searchCondition"] = "notAncmtSj"
-            data["searchKeyword"] = keyword
+            data["searchType"] = "tit"
+            data["searchTxt"] = keyword
 
         resp = self.session.post(
             f"{LIST_URL}?seCode=02&mid={MID}", data=data, timeout=15

@@ -45,6 +45,7 @@ class GoryeongCrawler:
         }
         if keyword:
             data["searchOk"] = "Y"
+            data["searchType"] = "subject"
             data["keyword"] = keyword
 
         resp = self.session.post(

@@ -47,7 +47,7 @@ class GuroCrawler:
         }
         if keyword:
             params["searchCnd"] = "SJ"
-            params["searchWrd"] = keyword
+            params["searchKrwd"] = keyword
 
         resp = self.session.get(LIST_URL, params=params, timeout=15)
         resp.encoding = "utf-8"
