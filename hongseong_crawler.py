@@ -47,10 +47,7 @@ class HongseongCrawler:
         soup = BeautifulSoup(resp.text, "lxml")
 
         total_count = 0
-        m = re.search(r'총\s*([\d,]+)\s*건', soup.get_text())
-        if m:
-            total_count = int(m.group(1).replace(",", ""))
-        if not total_count:
+        if not keyword:
             pages = [int(x) for x in re.findall(r'pageIndex=(\d+)', resp.text)]
             if pages:
                 total_count = max(pages) * PAGE_SIZE
@@ -67,7 +64,9 @@ class HongseongCrawler:
             if len(tds) < 5:
                 continue
 
-            number = tds[0].get_text(strip=True)
+            number = tds[0].get_text(strip=True).replace(",", "")
+            if not total_count and number.isdigit():
+                total_count = int(number)
             gosi_no = tds[1].get_text(strip=True)
             a_tag = tds[2].find("a")
             if not a_tag:
