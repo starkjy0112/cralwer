@@ -2,8 +2,7 @@
 """
 동대문구청 입찰공고 크롤러 (서울계약마당 iframe)
 https://www.ddm.go.kr/www/contents.do?key=169
-→ contract.seoul.go.kr iframe (동대문구 검색)
-GET 기반, 10건/페이지, 3행=1건 구조
+→ contract.seoul.go.kr pubBidInfo.do (ps1_searchTxt=동대문구)
 """
 import math
 import re
@@ -12,7 +11,6 @@ from requests.adapters import HTTPAdapter
 from datetime import datetime
 from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
 
 BASE_URL = "https://contract.seoul.go.kr"
 LIST_URL = f"{BASE_URL}/new1/views/pubBidInfo.do"
@@ -27,25 +25,20 @@ class DdmBidCrawler:
         self.session = requests.Session()
         self.session.verify = False
         self.session.headers.update({
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
-            ),
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         })
         adapter = HTTPAdapter(pool_connections=1, pool_maxsize=20)
         self.session.mount("https://", adapter)
         self.session.mount("http://", adapter)
 
     def _fetch_page(self, keyword, page):
-        current_year = str(datetime.now().year)
         params = {
             "ps_selectForm": "1",
-            "ps1_fisYear": current_year,
-            "ps1_selectSearch": "2",
-            "ps1_searchTxt": keyword if keyword else "동대문구",
-            "ps_currentPageNo": str(page),
             "ps_recordCountPerPage": str(PAGE_SIZE),
+            "ps1_fisYear": str(datetime.now().year),
+            "ps1_selectSearch": "2",
+            "ps1_searchTxt": "동대문구",
+            "ps_currentPageNo": str(page),
         }
 
         resp = self.session.get(LIST_URL, params=params, timeout=15)
@@ -69,47 +62,30 @@ class DdmBidCrawler:
             row_title = rows[i + 1]
             row_date = rows[i + 2]
             i += 3
-
             meta_td = row_meta.find("td", class_="settxt")
             if not meta_td:
                 continue
-
             title_td = row_title.find("td", class_="setst")
             if not title_td:
                 continue
             link = title_td.find("a")
             title = link.get_text(strip=True) if link else title_td.get_text(strip=True)
-
             detail_url = LIST_URL
             bid_no = ""
             if link:
                 onclick = link.get("onclick", "")
-                m_bid = re.search(
-                    r"bidPopup_getBidInfoDtlUrl\(\s*'(\d+)'\s*,\s*'([^']+)'\s*,\s*'([^']+)'\s*,\s*'(\d+)'\s*\)",
-                    onclick,
-                )
+                m_bid = re.search(r"bidPopup_getBidInfoDtlUrl\(\s*'(\d+)'\s*,\s*'([^']+)'\s*,\s*'([^']+)'\s*,\s*'(\d+)'\s*\)", onclick)
                 if m_bid:
-                    bid_id = m_bid.group(2)
+                    bid_no = m_bid.group(2)
                     bid_seq = m_bid.group(3)
-                    bid_no = bid_id
-                    detail_url = f"{BASE_URL}/new1/views/pubBidInfoDtl.do?bidNo={bid_id}&bidSeq={bid_seq}"
-
+                    detail_url = f"{BASE_URL}/new1/views/pubBidInfoDtl.do?bidNo={bid_no}&bidSeq={bid_seq}"
             date = ""
-            date_tds = row_date.find_all("td")
-            for td in date_tds:
-                text = td.get_text(strip=True)
-                m_d = re.search(r"(\d{4}-\d{2}-\d{2})", text)
+            for td in row_date.find_all("td"):
+                m_d = re.search(r"(\d{4}-\d{2}-\d{2})", td.get_text(strip=True))
                 if m_d:
                     date = m_d.group(1)
                     break
-
-            items.append({
-                "number": bid_no,
-                "title": title,
-                "date": date,
-                "url": detail_url,
-                "organization": ORGANIZATION_NAME,
-            })
+            items.append({"number": bid_no, "title": title, "date": date, "url": detail_url, "organization": ORGANIZATION_NAME})
 
         return items, total_count
 
@@ -120,16 +96,12 @@ class DdmBidCrawler:
         total_pages = max(1, math.ceil(total_count / PAGE_SIZE))
         actual_pages = min(total_pages, max_pages)
         print(f"  [Page 1/{actual_pages}] {len(first_items)}건 수집 (전체 {total_count}건)")
-
         if actual_pages <= 1:
             all_items = first_items
         else:
             page_results = {1: first_items}
             with ThreadPoolExecutor(max_workers=self.WORKERS) as executor:
-                futures = {
-                    executor.submit(self._fetch_page, keyword, p): p
-                    for p in range(2, actual_pages + 1)
-                }
+                futures = {executor.submit(self._fetch_page, keyword, p): p for p in range(2, actual_pages + 1)}
                 for future in as_completed(futures):
                     p = futures[future]
                     try:
@@ -138,19 +110,11 @@ class DdmBidCrawler:
                             page_results[p] = items
                     except Exception:
                         pass
-
             all_items = []
             for p in sorted(page_results.keys()):
                 all_items.extend(page_results[p])
-
+        if keyword:
+            all_items = [item for item in all_items if keyword in item["title"]]
         all_items.sort(key=lambda x: x["date"], reverse=True)
         print(f"[{ORGANIZATION_NAME}] 완료: 총 {len(all_items)}건")
         return all_items
-
-
-if __name__ == "__main__":
-    crawler = DdmBidCrawler()
-    print("=== 전체 조회 ===")
-    results = crawler.search("", max_pages=1)
-    for r in results[:3]:
-        print(f"  [{r['date']}] {r['title'][:50]}")

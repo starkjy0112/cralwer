@@ -2,7 +2,7 @@
 """
 관악구청 입찰공고 크롤러 (서울계약마당 iframe)
 https://www.gwanak.go.kr/site/gwanak/01/10102050200002016051201.jsp
-→ contract.seoul.go.kr iframe (ps_setOfficeCd=5100)
+→ contract.seoul.go.kr pubBidInfoFrame.do (ps_setOfficeCd=5100)
 GET 기반, 10건/페이지, 3행=1건 구조
 """
 import math
@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 BASE_URL = "https://contract.seoul.go.kr"
-LIST_URL = f"{BASE_URL}/new1/views/pubBidInfo.do"
+LIST_URL = f"{BASE_URL}/new1/views/pubBidInfoFrame.do"
 PAGE_SIZE = 10
 ORGANIZATION_NAME = "관악구청"
 OFFICE_CD = "5100"
@@ -39,15 +39,20 @@ class GwanakBidCrawler:
         self.session.mount("http://", adapter)
 
     def _fetch_page(self, keyword, page):
-        current_year = str(datetime.now().year)
         params = {
-            "ps_selectForm": "1",
-            "ps1_fisYear": current_year,
-            "ps1_selectSearch": "2",
-            "ps1_searchTxt": keyword if keyword else "관악구",
+            "ps_frame": "true",
+            "ps_t2OfficeCd": "4",
+            "ps_setOfficeCd": OFFICE_CD,
+            "ps_firstPage": "" if page > 1 else "",
+            "ps_selectForm": "0",
             "ps_currentPageNo": str(page),
             "ps_recordCountPerPage": str(PAGE_SIZE),
         }
+        if keyword:
+            params["ps_selectForm"] = "1"
+            params["ps1_fisYear"] = str(datetime.now().year)
+            params["ps1_selectSearch"] = "1"
+            params["ps1_searchTxt"] = keyword
 
         resp = self.session.get(LIST_URL, params=params, timeout=15)
         resp.encoding = "utf-8"
@@ -90,10 +95,9 @@ class GwanakBidCrawler:
                     onclick,
                 )
                 if m_bid:
-                    bid_id = m_bid.group(2)
+                    bid_no = m_bid.group(2)
                     bid_seq = m_bid.group(3)
-                    bid_no = bid_id
-                    detail_url = f"{BASE_URL}/new1/views/pubBidInfoDtl.do?bidNo={bid_id}&bidSeq={bid_seq}"
+                    detail_url = f"{BASE_URL}/new1/views/pubBidInfoDtl.do?bidNo={bid_no}&bidSeq={bid_seq}"
 
             date = ""
             date_tds = row_date.find_all("td")
@@ -121,7 +125,6 @@ class GwanakBidCrawler:
         total_pages = max(1, math.ceil(total_count / PAGE_SIZE))
         actual_pages = min(total_pages, max_pages)
         print(f"  [Page 1/{actual_pages}] {len(first_items)}건 수집 (전체 {total_count}건)")
-
         if actual_pages <= 1:
             all_items = first_items
         else:
@@ -139,19 +142,9 @@ class GwanakBidCrawler:
                             page_results[p] = items
                     except Exception:
                         pass
-
             all_items = []
             for p in sorted(page_results.keys()):
                 all_items.extend(page_results[p])
-
         all_items.sort(key=lambda x: x["date"], reverse=True)
         print(f"[{ORGANIZATION_NAME}] 완료: 총 {len(all_items)}건")
         return all_items
-
-
-if __name__ == "__main__":
-    crawler = GwanakBidCrawler()
-    print("=== 전체 조회 ===")
-    results = crawler.search("", max_pages=1)
-    for r in results[:3]:
-        print(f"  [{r['date']}] {r['title'][:50]}")
