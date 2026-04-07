@@ -508,6 +508,15 @@
                 </button>
             </div>
 
+            <!-- 자주 쓰는 검색어 -->
+            <div id="quickSearchWrap" style="margin-top: 10px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                <span style="font-size: 0.8rem; color: #6c757d; margin-right: 4px;"><i class="bi bi-bookmark"></i> 빠른검색:</span>
+                <div id="quickSearchTags" style="display: flex; gap: 5px; flex-wrap: wrap;"></div>
+                <button onclick="addQuickSearch()" class="btn btn-sm btn-outline-primary" style="font-size: 0.75rem; padding: 2px 8px;">
+                    <i class="bi bi-plus"></i> 추가
+                </button>
+            </div>
+
             <!-- 날짜 필터 -->
             <div class="date-filter" style="margin-top: 15px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
                 <label style="font-size: 0.85rem; color: #6c757d;">
@@ -622,6 +631,62 @@
         let dateStart = null;
         let dateEnd = null;
         let dateFilterEnabled = false;
+
+        // 빠른 검색어 관리
+        const DEFAULT_QUICK_SEARCHES = [
+            '기본설계', '실시설계', '기술제안', '제안서', '신기술', '공법',
+            '특허', '발파', '미진동', '무진동', '절토', '토공', '토목',
+            '부지조성', '산업단지', '조성공사', '개발사업'
+        ];
+
+        function getQuickSearches() {
+            const saved = localStorage.getItem('quickSearches');
+            return saved ? JSON.parse(saved) : DEFAULT_QUICK_SEARCHES;
+        }
+
+        function saveQuickSearches(list) {
+            localStorage.setItem('quickSearches', JSON.stringify(list));
+        }
+
+        function renderQuickSearchTags() {
+            const tags = getQuickSearches();
+            const container = document.getElementById('quickSearchTags');
+            container.innerHTML = tags.map((kw, idx) =>
+                `<span class="badge bg-light text-dark border" style="cursor:pointer; font-size:0.78rem; padding:4px 10px;" onclick="quickSearch('${kw}')">
+                    ${kw}
+                    <i class="bi bi-x" style="margin-left:3px; cursor:pointer; color:#dc3545;" onclick="event.stopPropagation(); removeQuickSearch(${idx})"></i>
+                </span>`
+            ).join('');
+        }
+
+        function quickSearch(keyword) {
+            document.getElementById('searchKeyword').value = keyword;
+            performSearch();
+        }
+
+        function addQuickSearch() {
+            const kw = prompt('추가할 검색어를 입력하세요:');
+            if (kw && kw.trim()) {
+                const list = getQuickSearches();
+                if (!list.includes(kw.trim())) {
+                    list.push(kw.trim());
+                    saveQuickSearches(list);
+                    renderQuickSearchTags();
+                }
+            }
+        }
+
+        function removeQuickSearch(idx) {
+            const list = getQuickSearches();
+            list.splice(idx, 1);
+            saveQuickSearches(list);
+            renderQuickSearchTags();
+        }
+
+        // 페이지 로드 시 빠른 검색어 렌더링
+        document.addEventListener('DOMContentLoaded', () => {
+            renderQuickSearchTags();
+        });
 
         // 사이드바 토글
         function toggleSidebar() {
