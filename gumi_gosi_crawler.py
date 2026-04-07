@@ -42,7 +42,7 @@ class GumiGosiCrawler:
             "seCode": "01",
         }
         if keyword:
-            data["searchType"] = "tit"
+            data["searchType"] = "not_ancmt_sj"
             data["searchTxt"] = keyword
 
         resp = self.session.post(
@@ -53,11 +53,12 @@ class GumiGosiCrawler:
 
         # Parse total pages from "현재 페이지1/ 전체 페이지 1,743"
         total_count = 0
-        page_num = soup.find("p", class_="page_num") or soup.find("span", class_="page_num")
-        if page_num:
-            m = re.search(r"전체\s*페이지\s*([\d,]+)", page_num.get_text())
-            if m:
-                total_count = int(m.group(1).replace(",", "")) * PAGE_SIZE
+        if not keyword:
+            page_num = soup.find("p", class_="page_num") or soup.find("span", class_="page_num")
+            if page_num:
+                m = re.search(r"전체\s*페이지\s*([\d,]+)", page_num.get_text())
+                if m:
+                    total_count = int(m.group(1).replace(",", "")) * PAGE_SIZE
 
         items = []
         table = soup.find("table", class_="bod_list") or soup.find("table")
@@ -70,7 +71,9 @@ class GumiGosiCrawler:
             tds = tr.find_all("td")
             if len(tds) < 5:
                 continue
-            number = tds[0].get_text(strip=True)
+            number = tds[0].get_text(strip=True).replace(",", "")
+            if not total_count and number.isdigit():
+                total_count = int(number)
             gosi_no = tds[1].get_text(strip=True)
 
             a_tag = tds[2].find("a")

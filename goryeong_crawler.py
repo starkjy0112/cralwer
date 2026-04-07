@@ -45,8 +45,8 @@ class GoryeongCrawler:
         }
         if keyword:
             data["searchOk"] = "Y"
-            data["searchType"] = "subject"
-            data["keyword"] = keyword
+            data["searchType"] = "SUBJECT"
+            data["searchValue"] = keyword
 
         resp = self.session.post(
             f"{LIST_URL}?IDX=154&BRD_ID=1023", data=data, timeout=15

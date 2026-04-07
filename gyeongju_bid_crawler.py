@@ -42,7 +42,7 @@ class GyeongjuBidCrawler:
         }
         if keyword:
             params["srchColumn"] = "bod_title"
-            params["srchKwd"] = keyword
+            params["srchKeyword"] = keyword
 
         resp = self.session.get(LIST_URL, params=params, timeout=15)
         resp.encoding = "utf-8"
