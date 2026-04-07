@@ -35,6 +35,7 @@ from lh_crawler import LHCrawler
 from gtdc_crawler import GTDCCrawler
 from gdco_bid_crawler import GDCOBidCrawler
 from gmdc_crawler import GMDCCrawler
+from gmcc_crawler import GMCCCrawler
 from gndc_crawler import GNDCCrawler
 
 from gbdc_crawler import GBDCCrawler
@@ -453,6 +454,12 @@ CRAWLERS = {
         "type": "입찰공고",
         "instance": GMDCCrawler(),
         "url": "https://www.gmdc.co.kr"
+    },
+    "gmcc": {
+        "name": "광주광역시도시공사",
+        "type": "통합검색",
+        "instance": GMCCCrawler(),
+        "url": "https://www.gmcc.co.kr"
     },
     "gndc": {
         "name": "경남개발공사",
