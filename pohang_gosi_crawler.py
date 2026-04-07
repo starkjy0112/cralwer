@@ -51,11 +51,12 @@ class PohangGosiCrawler:
         soup = BeautifulSoup(resp.text, "lxml")
 
         total_count = 0
-        page_num = soup.find("p", class_="page_num")
-        if page_num:
-            m = re.search(r"전체\s*페이지\s*([\d,]+)", page_num.get_text())
-            if m:
-                total_count = int(m.group(1).replace(",", "")) * PAGE_SIZE
+        if not keyword:
+            page_num = soup.find("p", class_="page_num")
+            if page_num:
+                m = re.search(r"전체\s*페이지\s*([\d,]+)", page_num.get_text())
+                if m:
+                    total_count = int(m.group(1).replace(",", "")) * PAGE_SIZE
 
         items = []
         table = soup.select_one("table.bod_list")

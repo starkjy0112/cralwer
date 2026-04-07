@@ -51,11 +51,12 @@ class MungyeongBidCrawler:
         soup = BeautifulSoup(resp.text, "lxml")
 
         total_count = 0
-        page_num = soup.find("p", class_="page_num") or soup.find("span", class_="page_num")
-        if page_num:
-            m = re.search(r"전체\s*페이지\s*([\d,]+)", page_num.get_text())
-            if m:
-                total_count = int(m.group(1).replace(",", "")) * PAGE_SIZE
+        if not keyword:
+            page_num = soup.find("p", class_="page_num") or soup.find("span", class_="page_num")
+            if page_num:
+                m = re.search(r"전체\s*페이지\s*([\d,]+)", page_num.get_text())
+                if m:
+                    total_count = int(m.group(1).replace(",", "")) * PAGE_SIZE
 
         items = []
         table = soup.find("table", class_="bod_list") or soup.find("table")
@@ -69,6 +70,9 @@ class MungyeongBidCrawler:
             if len(tds) < 6:
                 continue
             number = tds[0].get_text(strip=True)
+            number = number.replace(",", "")
+            if not total_count and number.isdigit():
+                total_count = int(number)
             gosi_no = tds[1].get_text(strip=True)
 
             a_tag = tds[2].find("a")
