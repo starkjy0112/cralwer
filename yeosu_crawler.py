@@ -37,7 +37,7 @@ class YeosuCrawler:
         start_count = (page - 1) * PAGE_SIZE
         params = {
             "query": keyword or "",
-            "collection": "ysboard",
+            "collection": "ALL",
             "sortField": "DATE",
             "searchField": "ALL",
             "startCount": str(start_count),
