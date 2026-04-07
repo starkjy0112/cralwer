@@ -44,7 +44,7 @@ class JeonjuCrawler:
             "startPage": str(page),
         }
         if keyword:
-            params["searchType"] = "DATA_TITLE"
+            params["searchType"] = "dataTitle"
             params["keyword"] = keyword
 
         resp = self.session.get(LIST_URL, params=params, timeout=15, verify=False)

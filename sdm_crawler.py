@@ -41,10 +41,6 @@ class SdmCrawler:
             "mode": "list",
             "cp": str(page),
         }
-        if keyword:
-            data["keycol"] = "title"
-            data["keyword"] = keyword
-
         resp = self.session.post(LIST_URL, data=data, timeout=15)
         # Server may respond with euc-kr
         if "euc-kr" in resp.headers.get("Content-Type", "").lower():
@@ -143,6 +139,8 @@ class SdmCrawler:
             for p in sorted(page_results.keys()):
                 all_items.extend(page_results[p])
 
+        if keyword:
+            all_items = [item for item in all_items if keyword in item["title"]]
         all_items.sort(key=lambda x: x["date"], reverse=True)
         print(f"[{ORGANIZATION_NAME}] 완료: 총 {len(all_items)}건")
         return all_items

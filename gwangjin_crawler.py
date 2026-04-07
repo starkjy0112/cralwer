@@ -42,7 +42,7 @@ class GwangjinCrawler:
             "pageIndex": str(page),
         }
         if keyword:
-            params["searchCnd"] = "SJ"
+            params["searchCnd"] = "0"
             params["searchWrd"] = keyword
 
         resp = self.session.get(LIST_URL, params=params, timeout=15)
