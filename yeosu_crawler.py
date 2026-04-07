@@ -50,9 +50,10 @@ class YeosuCrawler:
         soup = BeautifulSoup(resp.text, "lxml")
 
         total_count = 0
-        total_match = re.search(r'총\s*([\d,]+)\s*건', resp.text)
-        if total_match:
-            total_count = int(total_match.group(1).replace(",", ""))
+        # 카테고리별 "총 N건"을 합산
+        all_counts = re.findall(r'총\s*([\d,]+)\s*건', resp.text)
+        for c_str in all_counts:
+            total_count += int(c_str.replace(",", ""))
 
         items = []
         # Results are in <ul> > <li> with h4 > span.site_name + a > span.tit + span.date
