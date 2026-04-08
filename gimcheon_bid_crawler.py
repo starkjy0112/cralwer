@@ -107,47 +107,67 @@ class GimcheonBidCrawler:
     WORKERS = 20
 
     def search(self, keyword="", max_pages=10, start_date=None, end_date=None):
-        first_items, total_count = self._fetch_page(keyword, 1)
-        total_pages = max(1, math.ceil(total_count / PAGE_SIZE))
-        actual_pages = min(total_pages, max_pages)
-        print(f"  [Page 1/{actual_pages}] {len(first_items)}건 수집 (전체 {total_count}건)")
-
-        if actual_pages <= 1:
-            all_items = first_items
-        else:
-            page_results = {1: first_items}
-            with ThreadPoolExecutor(max_workers=self.WORKERS) as executor:
-                futures = {
-                    executor.submit(self._fetch_page, keyword, p): p
-                    for p in range(2, actual_pages + 1)
-                }
-                for future in as_completed(futures):
-                    p = futures[future]
-                    try:
-                        items, _ = future.result()
-                        if items:
-                            page_results[p] = items
-                    except Exception:
-                        pass
-
-            all_items = []
-            for p in sorted(page_results.keys()):
-                all_items.extend(page_results[p])
-
-        # 날짜 필터 (기본: 최근 30일)
+        # 날짜 기본값 (최근 30일)
         if not start_date:
             start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
         if not end_date:
             end_date = datetime.now().strftime("%Y-%m-%d")
 
-        filtered = []
-        for item in all_items:
+        first_items, total_count = self._fetch_page(keyword, 1)
+        total_pages = max(1, math.ceil(total_count / PAGE_SIZE))
+        actual_pages = min(total_pages, max_pages)
+        print(f"  [Page 1/{actual_pages}] {len(first_items)}건 수집 (전체 {total_count}건)")
+
+        all_items = []
+        stop = False
+
+        # 첫 페이지 날짜 필터
+        for item in first_items:
             d = (item.get("date") or "").replace(".", "-").replace("/", "-")[:10]
             if not d:
                 continue
-            if start_date <= d <= end_date:
-                filtered.append(item)
-        all_items = filtered
+            if d < start_date:
+                stop = True
+                continue
+            if d <= end_date:
+                all_items.append(item)
+
+        # 나머지 페이지 순차 수집 + early stop
+        if not stop and actual_pages > 1:
+            page = 2
+            while page <= actual_pages and not stop:
+                # 배치 단위로 병렬 수집
+                batch_end = min(page + self.WORKERS, actual_pages + 1)
+                with ThreadPoolExecutor(max_workers=self.WORKERS) as executor:
+                    futures = {
+                        executor.submit(self._fetch_page, keyword, p): p
+                        for p in range(page, batch_end)
+                    }
+                    batch_results = {}
+                    for future in as_completed(futures):
+                        p = futures[future]
+                        try:
+                            items, _ = future.result()
+                            if items:
+                                batch_results[p] = items
+                        except Exception:
+                            pass
+
+                # 페이지 순서대로 날짜 체크
+                for p in sorted(batch_results.keys()):
+                    for item in batch_results[p]:
+                        d = (item.get("date") or "").replace(".", "-").replace("/", "-")[:10]
+                        if not d:
+                            continue
+                        if d < start_date:
+                            stop = True
+                            break
+                        if d <= end_date:
+                            all_items.append(item)
+                    if stop:
+                        break
+
+                page = batch_end
 
         all_items.sort(key=lambda x: x["date"], reverse=True)
         print(f"[{ORGANIZATION_NAME} 입찰정보] 완료: 총 {len(all_items)}건")
