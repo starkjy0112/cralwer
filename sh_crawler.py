@@ -10,6 +10,7 @@ Uses concurrent requests for faster crawling.
 """
 
 import re
+from datetime import datetime, timedelta
 import requests
 from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
@@ -143,7 +144,7 @@ class SHCrawler:
         if total_pages > 1:
             with ThreadPoolExecutor(max_workers=self.WORKERS) as executor:
                 futures = {
-                    executor.submit(self._fetch_and_parse, p, keyword): p
+                    executor.submit(self._fetch_and_parse, p, keyword, start_date=None, end_date=None): p
                     for p in range(2, total_pages + 1)
                 }
                 for future in as_completed(futures):
@@ -155,6 +156,19 @@ class SHCrawler:
         all_results = []
         for p in sorted(page_results.keys()):
             all_results.extend(page_results[p])
+
+
+        # 날짜 필터 (기본: 최근 30일)
+        if not start_date:
+            start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+        if not end_date:
+            end_date = datetime.now().strftime("%Y-%m-%d")
+        _filtered = []
+        for _item in all_results:
+            _d = (_item.get("date") or "").replace(".", "-").replace("/", "-")[:10]
+            if _d and start_date <= _d <= end_date:
+                _filtered.append(_item)
+        all_results = _filtered
 
         return all_results
 

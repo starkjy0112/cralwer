@@ -4,6 +4,7 @@
 https://www.jpdc.co.kr/help/search.htm
 """
 import re
+from datetime import datetime, timedelta
 import requests
 from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup, NavigableString
@@ -84,7 +85,7 @@ class JPDCCrawler:
         has_next = len(items) >= 10
         return items, has_next
 
-    def search(self, keyword="", max_pages=10):
+    def search(self, keyword="", max_pages=10, start_date=None, end_date=None):
         """게시물을 검색합니다. 통합검색이므로 키워드가 필요합니다."""
         if not keyword:
             keyword = " "  # 빈 키워드면 공백으로 대체
@@ -101,6 +102,21 @@ class JPDCCrawler:
             print(f"  [Page {page}] {len(items)}건 수집 (전체 {len(all_items)}건)")
             if not has_next or not items:
                 break
+
+        # 날짜 필터 (기본: 최근 30일)
+        if not start_date:
+            start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+        if not end_date:
+            end_date = datetime.now().strftime("%Y-%m-%d")
+
+        filtered = []
+        for item in all_items:
+            d = (item.get("date") or "").replace(".", "-").replace("/", "-")[:10]
+            if not d:
+                continue
+            if start_date <= d <= end_date:
+                filtered.append(item)
+        all_items = filtered
 
         all_items.sort(key=lambda x: x["date"], reverse=True)
         print(f"[제주개발공사] 완료: 총 {len(all_items)}건")

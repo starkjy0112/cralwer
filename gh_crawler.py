@@ -7,6 +7,7 @@ AJAX 기반: /gh/search/ajax/result.do
 """
 import math
 import re
+from datetime import datetime, timedelta
 import requests
 from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
@@ -149,7 +150,7 @@ class GHCrawler:
             all_items.extend(page_results[p])
         return all_items
 
-    def search(self, keyword="", max_pages=10):
+    def search(self, keyword="", max_pages=10, start_date=None, end_date=None):
         """통합검색 (모든 카테고리)을 실행합니다."""
         if not keyword:
             keyword = " "
@@ -164,6 +165,21 @@ class GHCrawler:
         for cat in CATEGORIES:
             items = self._fetch_category(keyword, cat, max_pages)
             all_items.extend(items)
+
+        # 날짜 필터 (기본: 최근 30일)
+        if not start_date:
+            start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+        if not end_date:
+            end_date = datetime.now().strftime("%Y-%m-%d")
+
+        filtered = []
+        for item in all_items:
+            d = (item.get("date") or "").replace(".", "-").replace("/", "-")[:10]
+            if not d:
+                continue
+            if start_date <= d <= end_date:
+                filtered.append(item)
+        all_items = filtered
 
         all_items.sort(key=lambda x: x["date"], reverse=True)
         print(f"[경기주택도시공사] 완료: 총 {len(all_items)}건")

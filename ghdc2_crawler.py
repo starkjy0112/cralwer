@@ -4,6 +4,7 @@
 POST 검색 + HTML 테이블 파싱 방식
 """
 import re
+from datetime import datetime, timedelta
 import requests
 from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
@@ -155,7 +156,7 @@ class GHDCOnbidBidCrawler:
 
         return results
 
-    def search(self, keyword: str = "", max_pages: int = 5):
+    def search(self, keyword: str = "", max_pages: int = 5, start_date=None, end_date=None):
         """
         입찰공고(온비드) 검색
 
@@ -207,6 +208,19 @@ class GHDCOnbidBidCrawler:
             f"[{self.ORGANIZATION} {self.BOARD_NAME}] 완료: "
             f"총 {len(all_results)}건 (일반: {data_count}건, 공지: {notice_count}건)"
         )
+
+        # 날짜 필터 (기본: 최근 30일)
+        if not start_date:
+            start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+        if not end_date:
+            end_date = datetime.now().strftime("%Y-%m-%d")
+        _filtered = []
+        for _item in all_results:
+            _d = (_item.get("date") or "").replace(".", "-").replace("/", "-")[:10]
+            if _d and start_date <= _d <= end_date:
+                _filtered.append(_item)
+        all_results = _filtered
+
         return all_results
 
 

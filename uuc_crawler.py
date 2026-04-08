@@ -6,6 +6,7 @@ GET 기반, 게시판 검색
 """
 import math
 import re
+from datetime import datetime, timedelta
 import requests
 from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
@@ -80,7 +81,7 @@ class UUCCrawler:
 
         return items, total_count
 
-    def search(self, keyword="", max_pages=10):
+    def search(self, keyword="", max_pages=10, start_date=None, end_date=None):
         if not keyword:
             print("[의왕도시공사] 통합검색은 키워드가 필요합니다")
             return []
@@ -113,6 +114,19 @@ class UUCCrawler:
                 all_items.extend(page_results[p])
 
         print(f"[의왕도시공사] 완료: 총 {len(all_items)}건")
+
+        # 날짜 필터 (기본: 최근 30일)
+        if not start_date:
+            start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+        if not end_date:
+            end_date = datetime.now().strftime("%Y-%m-%d")
+        _filtered = []
+        for _item in all_items:
+            _d = (_item.get("date") or "").replace(".", "-").replace("/", "-")[:10]
+            if _d and start_date <= _d <= end_date:
+                _filtered.append(_item)
+        all_items = _filtered
+
         return all_items
 
 

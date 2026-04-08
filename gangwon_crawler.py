@@ -138,6 +138,21 @@ class GangwonCrawler:
             for p in sorted(page_results.keys()):
                 all_items.extend(page_results[p])
 
+        # 날짜 필터 (기본: 최근 30일)
+        if not start_date:
+            start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+        if not end_date:
+            end_date = datetime.now().strftime("%Y-%m-%d")
+
+        filtered = []
+        for item in all_items:
+            d = (item.get("date") or "").replace(".", "-").replace("/", "-")[:10]
+            if not d:
+                continue
+            if start_date <= d <= end_date:
+                filtered.append(item)
+        all_items = filtered
+
         all_items.sort(key=lambda x: x["date"], reverse=True)
         print(f"[강원특별자치도청] 완료: 총 {len(all_items)}건")
         return all_items

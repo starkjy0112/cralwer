@@ -5,6 +5,7 @@ https://www.suwonudc.co.kr/swdevelop/cop/bbs/selectBoardList.do?bbsId=gongmo2_sw
 GET 기반
 """
 import re
+from datetime import datetime, timedelta
 import requests
 from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
@@ -101,7 +102,7 @@ class SUWONUDCCrawler:
 
         return items, total_count
 
-    def search(self, keyword="", max_pages=10):
+    def search(self, keyword="", max_pages=10, start_date=None, end_date=None):
         first_items, total_count = self._fetch_page(keyword, 1)
         print(f"  [Page 1] {len(first_items)}건 수집 (전체 {total_count}건)")
 
@@ -113,6 +114,21 @@ class SUWONUDCCrawler:
                 break
             all_items.extend(items)
             page += 1
+
+        # 날짜 필터 (기본: 최근 30일)
+        if not start_date:
+            start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+        if not end_date:
+            end_date = datetime.now().strftime("%Y-%m-%d")
+
+        filtered = []
+        for item in all_items:
+            d = (item.get("date") or "").replace(".", "-").replace("/", "-")[:10]
+            if not d:
+                continue
+            if start_date <= d <= end_date:
+                filtered.append(item)
+        all_items = filtered
 
         all_items.sort(key=lambda x: x["date"], reverse=True)
         print(f"[수원도시공사] 완료: 총 {len(all_items)}건")
