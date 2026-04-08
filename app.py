@@ -2452,6 +2452,108 @@ cache = {}
 cache_lock = threading.Lock()
 
 
+## ── 지역별 크롤러 그룹 ──
+
+_CITY_TO_REGION = {
+    # 서울
+    '강남': '서울', '강동': '서울', '강북': '서울', '강서': '서울', '관악': '서울', '광진': '서울',
+    '구로': '서울', '금천': '서울', '노원': '서울', '도봉': '서울', '동대문': '서울', '동작': '서울',
+    '마포': '서울', '서대문': '서울', '서초': '서울', '성동': '서울', '성북': '서울', '송파': '서울',
+    '양천': '서울', '영등포': '서울', '용산': '서울', '은평': '서울', '종로': '서울', '중구': '서울',
+    '중랑': '서울', '서울': '서울',
+    # 경기
+    '수원': '경기', '성남': '경기', '용인': '경기', '안양': '경기', '안산': '경기', '고양': '경기',
+    '과천': '경기', '광명': '경기', '구리': '경기', '군포': '경기', '김포': '경기',
+    '남양주': '경기', '동두천': '경기', '부천': '경기', '시흥': '경기', '안성': '경기', '양주': '경기',
+    '양평': '경기', '여주': '경기', '오산': '경기', '의왕': '경기', '의정부': '경기', '이천': '경기',
+    '파주': '경기', '평택': '경기', '포천': '경기', '하남': '경기', '화성': '경기', '가평': '경기',
+    '연천': '경기', '경기': '경기',
+    # 인천
+    '인천': '인천',
+    # 부산
+    '부산': '부산',
+    # 대구
+    '대구': '대구',
+    # 광주
+    '광주': '광주',
+    # 대전
+    '대전': '대전',
+    # 울산
+    '울산': '울산',
+    # 세종
+    '세종': '세종',
+    # 강원
+    '강릉': '강원', '동해': '강원', '삼척': '강원', '속초': '강원', '원주': '강원', '춘천': '강원',
+    '태백': '강원', '홍천': '강원', '횡성': '강원', '영월': '강원', '평창': '강원', '정선': '강원',
+    '철원': '강원', '화천': '강원', '양구': '강원', '인제': '강원', '고성': '강원', '양양': '강원',
+    '강원': '강원',
+    # 충북
+    '청주': '충북', '충주': '충북', '제천': '충북', '보은': '충북', '옥천': '충북', '영동': '충북',
+    '증평': '충북', '진천': '충북', '괴산': '충북', '음성': '충북', '단양': '충북', '충북': '충북',
+    # 충남
+    '천안': '충남', '공주': '충남', '보령': '충남', '아산': '충남', '서산': '충남', '논산': '충남',
+    '계룡': '충남', '당진': '충남', '금산': '충남', '부여': '충남', '서천': '충남', '청양': '충남',
+    '홍성': '충남', '예산': '충남', '태안': '충남', '충남': '충남',
+    # 전북
+    '전주': '전북', '군산': '전북', '익산': '전북', '정읍': '전북', '남원': '전북', '김제': '전북',
+    '완주': '전북', '진안': '전북', '무주': '전북', '장수': '전북', '임실': '전북', '순창': '전북',
+    '고창': '전북', '부안': '전북', '전북': '전북',
+    # 전남
+    '목포': '전남', '여수': '전남', '순천': '전남', '나주': '전남', '광양': '전남', '담양': '전남',
+    '곡성': '전남', '구례': '전남', '고흥': '전남', '보성': '전남', '화순': '전남', '장흥': '전남',
+    '강진': '전남', '해남': '전남', '영암': '전남', '무안': '전남', '함평': '전남', '영광': '전남',
+    '장성': '전남', '완도': '전남', '진도': '전남', '신안': '전남', '전남': '전남',
+    # 경북
+    '포항': '경북', '경주': '경북', '김천': '경북', '안동': '경북', '구미': '경북', '영주': '경북',
+    '영천': '경북', '상주': '경북', '문경': '경북', '경산': '경북', '군위': '경북', '의성': '경북',
+    '청송': '경북', '영양': '경북', '영덕': '경북', '청도': '경북', '고령': '경북', '성주': '경북',
+    '칠곡': '경북', '예천': '경북', '봉화': '경북', '울진': '경북', '울릉': '경북', '경북': '경북',
+    # 경남
+    '창원': '경남', '진주': '경남', '통영': '경남', '사천': '경남', '김해': '경남', '밀양': '경남',
+    '거제': '경남', '양산': '경남', '의령': '경남', '함안': '경남', '창녕': '경남',
+    '남해': '경남', '하동': '경남', '산청': '경남', '함양': '경남', '거창': '경남', '합천': '경남',
+    '경남': '경남',
+    # 제주
+    '제주': '제주',
+}
+
+_PUBLIC_KEYWORDS = ['나라장터', '알리오', 'LH', '국가철도', '도로공사']
+_DOCHUNG_KEYWORDS = ['경상북도청', '경상남도청', '전라남도청', '충청남도청', '충청북도청',
+                     '경상북도개발', '충청남도개발', '새만금', '한국농어촌']
+
+def _build_crawler_groups():
+    """크롤러를 지역별로 자동 분류"""
+    groups = {}
+    for cid, info in CRAWLERS.items():
+        name = info["name"]
+        # 공공기관
+        if any(k in name for k in _PUBLIC_KEYWORDS):
+            groups.setdefault("공공기관", []).append(cid)
+            continue
+        # 광역도청/개발공사
+        if any(k in name for k in _DOCHUNG_KEYWORDS):
+            groups.setdefault("광역도청", []).append(cid)
+            continue
+        # 지역 매칭
+        matched = False
+        for city, region in _CITY_TO_REGION.items():
+            if city in name:
+                groups.setdefault(region, []).append(cid)
+                matched = True
+                break
+        if not matched:
+            groups.setdefault("기타", []).append(cid)
+    return groups
+
+CRAWLER_GROUPS = _build_crawler_groups()
+
+# 그룹 순서 정의
+GROUP_ORDER = [
+    "공공기관", "서울", "경기", "인천", "부산", "대구", "광주", "대전", "울산", "세종",
+    "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주", "광역도청", "기타"
+]
+
+
 @app.route("/")
 def index():
     """메인 대시보드 페이지"""
@@ -2461,7 +2563,23 @@ def index():
 @app.route("/unified")
 def unified():
     """통합 검색 페이지"""
-    return render_template("unified.html", crawlers=CRAWLERS)
+    ordered_groups = {g: CRAWLER_GROUPS.get(g, []) for g in GROUP_ORDER if g in CRAWLER_GROUPS}
+    return render_template("unified.html", crawlers=CRAWLERS, crawler_groups=ordered_groups)
+
+
+@app.route("/api/crawler_groups")
+def get_crawler_groups():
+    """크롤러 그룹 목록 조회"""
+    result = {}
+    for g in GROUP_ORDER:
+        if g not in CRAWLER_GROUPS:
+            continue
+        result[g] = [{
+            "id": cid,
+            "name": CRAWLERS[cid]["name"],
+            "type": CRAWLERS[cid]["type"],
+        } for cid in CRAWLER_GROUPS[g]]
+    return jsonify(result)
 
 
 @app.route("/api/crawlers")
@@ -2594,9 +2712,28 @@ def search_all():
     """모든 크롤러 통합 검색"""
     keyword = request.args.get("keyword", "")
     max_pages = int(request.args.get("max_pages", 1000))
+    start_date = request.args.get("start_date", "")
+    end_date = request.args.get("end_date", "")
+
+    crawler_ids_param = request.args.get("crawler_ids", "")  # 콤마 구분
 
     if not keyword:
         return jsonify({"error": "검색어를 입력해주세요"}), 400
+
+    # 선택된 크롤러만 검색 (없으면 전체)
+    if crawler_ids_param:
+        selected_ids = set(crawler_ids_param.split(","))
+        target_crawlers = {k: v for k, v in CRAWLERS.items() if k in selected_ids}
+    else:
+        target_crawlers = CRAWLERS
+
+    DATE_SUPPORTED = (
+        "nara", "sh_bid",
+        "busan_gosi", "busan_notice", "daejeon_gosi", "gangwon",
+        "chungnam", "gb_notice", "gb_gosi",
+        "gwangju", "incheon", "seoul_cis",
+        "paju",
+    )
 
     results = {}
     errors = {}
@@ -2605,41 +2742,70 @@ def search_all():
         """개별 크롤러 검색 (스레드용)"""
         try:
             crawler = info["instance"]
-            data = crawler.search(keyword, max_pages=max_pages)
+            if crawler_id in DATE_SUPPORTED and start_date and end_date:
+                data = crawler.search(keyword, max_pages=max_pages,
+                                      start_date=start_date, end_date=end_date)
+            else:
+                data = crawler.search(keyword, max_pages=max_pages)
+
+            # 날짜 지원 안 하는 크롤러는 결과에서 날짜 필터링
+            if crawler_id not in DATE_SUPPORTED and start_date and end_date:
+                filtered = []
+                for item in data:
+                    date = item.get("date", "")
+                    if not date:
+                        continue  # 날짜 없으면 제외
+                    normalized = date.replace(".", "-").replace("/", "-")[:10]
+                    if start_date <= normalized <= end_date:
+                        filtered.append(item)
+                data = filtered
+
             return crawler_id, data, None
         except Exception as e:
             return crawler_id, [], str(e)
 
     # 멀티스레드로 병렬 검색
     import concurrent.futures
-    with concurrent.futures.ThreadPoolExecutor(max_workers=40) as executor:
+    worker_count = min(60, len(target_crawlers))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=worker_count) as executor:
         futures = {
             executor.submit(search_crawler, cid, info): cid
-            for cid, info in CRAWLERS.items()
+            for cid, info in target_crawlers.items()
         }
 
-        for future in concurrent.futures.as_completed(futures):
-            crawler_id, data, error = future.result()
-            if error:
-                errors[crawler_id] = error
-                results[crawler_id] = []
-            else:
-                results[crawler_id] = data
+        for future in concurrent.futures.as_completed(futures, timeout=90):
+            try:
+                crawler_id, data, error = future.result(timeout=30)
+                if error:
+                    errors[crawler_id] = error
+                    results[crawler_id] = []
+                else:
+                    results[crawler_id] = data
+            except Exception as e:
+                cid = futures[future]
+                errors[cid] = f"timeout: {str(e)[:50]}"
+                results[cid] = []
+
+    # 제목에 키워드가 포함된 결과만 필터 (검색 미지원 크롤러 대응)
+    filtered_results = {}
+    for crawler_id, data in results.items():
+        filtered = [item for item in data if keyword in (item.get("title") or "")]
+        filtered_results[crawler_id] = filtered
 
     # 결과 집계
-    total_count = sum(len(v) for v in results.values())
+    total_count = sum(len(v) for v in filtered_results.values())
 
     return jsonify({
         "success": True,
         "keyword": keyword,
-        "results": results,
+        "results": filtered_results,
         "summary": {
             crawler_id: {
                 "name": f"{CRAWLERS[crawler_id]['name']} ({CRAWLERS[crawler_id]['type']})",
                 "count": len(data),
                 "error": errors.get(crawler_id)
             }
-            for crawler_id, data in results.items()
+            for crawler_id, data in filtered_results.items()
         },
         "total_count": total_count,
         "errors": errors
@@ -2701,5 +2867,6 @@ def prefetch_slow_crawlers():
 
 if __name__ == "__main__":
     warmup_cookies()
-    prefetch_slow_crawlers()
-    app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", 5001)))
+    # prefetch_slow_crawlers()  # 개발 시 비활성화 (CPU 부하)
+    app.run(debug=False, host="0.0.0.0", port=int(os.environ.get("PORT", 5001)),
+            threaded=True)

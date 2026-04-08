@@ -19,10 +19,7 @@ AJAX_URL = f"{BASE_URL}/gh/search/ajax/result.do"
 
 # 크롤링 대상 카테고리 (staff 제외 - 항상 0건)
 CATEGORIES = {
-    "menu": "메뉴",
-    "content": "웹페이지",
     "board": "게시판",
-    "attach": "첨부파일",
 }
 
 

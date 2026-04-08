@@ -1056,7 +1056,7 @@
             if (!dateStart && !dateEnd) return true;
 
             const parsed = parseItemDate(itemDate);
-            if (!parsed) return true;
+            if (!parsed) return false;  // 날짜 없으면 제외
 
             if (dateStart && parsed < dateStart) return false;
             if (dateEnd && parsed > dateEnd) return false;

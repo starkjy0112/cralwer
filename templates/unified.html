@@ -6,6 +6,7 @@
     <title>통합 검색 - 입찰공고 크롤러</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
         :root {
             --primary-color: #4361ee;
@@ -25,349 +26,17 @@
             min-height: 100vh;
         }
 
-        /* 헤더 */
         .top-header {
             background: linear-gradient(135deg, var(--dark-color) 0%, #16213e 100%);
             color: white;
             padding: 30px 0;
             text-align: center;
-        }
-
-        .top-header h1 {
-            font-size: 1.8rem;
-            font-weight: 700;
-            margin-bottom: 10px;
-        }
-
-        .top-header p {
-            opacity: 0.7;
-            font-size: 0.95rem;
-        }
-
-        /* 검색 영역 */
-        .search-section {
-            background: white;
-            padding: 30px;
-            margin: -30px auto 30px;
-            max-width: 800px;
-            border-radius: 16px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
             position: relative;
-            z-index: 10;
         }
 
-        .search-box {
-            display: flex;
-            gap: 15px;
-        }
+        .top-header h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 10px; }
+        .top-header p { opacity: 0.7; font-size: 0.95rem; }
 
-        .search-input {
-            flex: 1;
-            padding: 15px 20px;
-            border: 2px solid #e9ecef;
-            border-radius: 12px;
-            font-size: 1.1rem;
-            transition: all 0.2s;
-        }
-
-        .search-input:focus {
-            outline: none;
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 4px rgba(67, 97, 238, 0.1);
-        }
-
-        .btn-search {
-            padding: 15px 40px;
-            background: var(--primary-color);
-            color: white;
-            border: none;
-            border-radius: 12px;
-            font-size: 1.1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .btn-search:hover {
-            background: var(--secondary-color);
-            transform: translateY(-2px);
-        }
-
-        .btn-search:disabled {
-            background: #adb5bd;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .search-options {
-            margin-top: 15px;
-            display: flex;
-            gap: 20px;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-
-        .search-options label {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            cursor: pointer;
-            font-size: 0.9rem;
-            color: #6c757d;
-        }
-
-        /* 컨테이너 */
-        .container-main {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 0 20px 40px;
-        }
-
-        /* 요약 카드 */
-        .summary-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 15px;
-            margin-bottom: 30px;
-        }
-
-        .summary-card {
-            background: white;
-            border-radius: 12px;
-            padding: 20px;
-            text-align: center;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-            cursor: pointer;
-            transition: all 0.2s;
-            border: 2px solid transparent;
-        }
-
-        .summary-card:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
-        }
-
-        .summary-card.active {
-            border-color: var(--primary-color);
-            background: rgba(67, 97, 238, 0.05);
-        }
-
-        .summary-card.has-error {
-            border-color: var(--danger-color);
-            opacity: 0.7;
-        }
-
-        .summary-card .count {
-            font-size: 2rem;
-            font-weight: 700;
-            color: var(--primary-color);
-        }
-
-        .summary-card .name {
-            font-size: 0.85rem;
-            color: #6c757d;
-            margin-top: 5px;
-        }
-
-        .summary-card .error-badge {
-            font-size: 0.7rem;
-            color: var(--danger-color);
-            margin-top: 5px;
-        }
-
-        /* 결과 섹션 */
-        .results-section {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-            overflow: hidden;
-        }
-
-        .results-header {
-            padding: 20px;
-            border-bottom: 1px solid #e9ecef;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 15px;
-        }
-
-        .results-title {
-            font-size: 1.2rem;
-            font-weight: 600;
-            color: var(--dark-color);
-        }
-
-        .results-title span {
-            color: var(--primary-color);
-        }
-
-        /* 탭 */
-        .tab-buttons {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        .tab-btn {
-            padding: 8px 16px;
-            border: 1px solid #e9ecef;
-            background: white;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 0.85rem;
-            transition: all 0.2s;
-        }
-
-        .tab-btn:hover, .tab-btn.active {
-            background: var(--primary-color);
-            color: white;
-            border-color: var(--primary-color);
-        }
-
-        /* 테이블 */
-        .data-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        .data-table th {
-            background: #f8f9fa;
-            padding: 15px;
-            text-align: left;
-            font-weight: 600;
-            font-size: 0.85rem;
-            color: #495057;
-            border-bottom: 2px solid #e9ecef;
-            position: sticky;
-            top: 0;
-        }
-
-        .data-table td {
-            padding: 15px;
-            border-bottom: 1px solid #e9ecef;
-            font-size: 0.9rem;
-        }
-
-        .data-table tr:hover {
-            background: #f8f9fa;
-        }
-
-        .source-badge {
-            display: inline-block;
-            padding: 4px 10px;
-            background: rgba(67, 97, 238, 0.1);
-            color: var(--primary-color);
-            border-radius: 20px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
-
-        .title-link {
-            color: var(--dark-color);
-            text-decoration: none;
-            transition: color 0.2s;
-        }
-
-        .title-link:hover {
-            color: var(--primary-color);
-        }
-
-        .notice-badge {
-            background: var(--danger-color);
-            color: white;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 0.7rem;
-            margin-right: 5px;
-        }
-
-        /* 페이지네이션 */
-        .pagination-wrapper {
-            padding: 20px;
-            display: flex;
-            justify-content: center;
-            gap: 5px;
-        }
-
-        .page-btn {
-            padding: 8px 14px;
-            border: 1px solid #e9ecef;
-            background: white;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .page-btn:hover, .page-btn.active {
-            background: var(--primary-color);
-            color: white;
-            border-color: var(--primary-color);
-        }
-
-        /* 로딩 */
-        .loading-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(255,255,255,0.95);
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 2000;
-        }
-
-        .loading-overlay.show { display: flex; }
-
-        .spinner {
-            width: 60px;
-            height: 60px;
-            border: 4px solid #e9ecef;
-            border-top-color: var(--primary-color);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        .loading-text {
-            margin-top: 20px;
-            font-size: 1.1rem;
-            color: var(--dark-color);
-        }
-
-        .loading-progress {
-            margin-top: 10px;
-            font-size: 0.9rem;
-            color: #6c757d;
-        }
-
-        /* 빈 상태 */
-        .empty-state {
-            text-align: center;
-            padding: 80px 20px;
-            color: #6c757d;
-        }
-
-        .empty-state i {
-            font-size: 5rem;
-            margin-bottom: 20px;
-            opacity: 0.2;
-        }
-
-        .empty-state h4 {
-            margin-bottom: 10px;
-            color: var(--dark-color);
-        }
-
-        /* 네비게이션 */
         .nav-links {
             position: absolute;
             top: 20px;
@@ -381,40 +50,362 @@
             transition: color 0.2s;
         }
 
-        .nav-links a:hover {
+        .nav-links a:hover { color: white; }
+
+        /* 검색 영역 */
+        .search-section {
+            background: white;
+            padding: 25px 30px;
+            margin: -30px auto 25px;
+            max-width: 900px;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            position: relative;
+            z-index: 10;
+        }
+
+        .search-box { display: flex; gap: 12px; }
+
+        .search-input {
+            flex: 1;
+            padding: 14px 18px;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            font-size: 1.05rem;
+            transition: all 0.2s;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 4px rgba(67, 97, 238, 0.1);
+        }
+
+        .btn-search {
+            padding: 14px 35px;
+            background: var(--primary-color);
             color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 1.05rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
-        /* 반응형 */
-        @media (max-width: 768px) {
-            .search-box {
-                flex-direction: column;
-            }
+        .btn-search:hover { background: var(--secondary-color); transform: translateY(-2px); }
+        .btn-search:disabled { background: #adb5bd; cursor: not-allowed; transform: none; }
 
-            .btn-search {
-                justify-content: center;
-            }
-
-            .summary-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
+        /* 빠른 검색어 */
+        .quick-search-section {
+            margin-top: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
         }
+
+        .quick-search-section .label {
+            font-size: 0.82rem;
+            color: #6c757d;
+            white-space: nowrap;
+        }
+
+        .quick-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            padding: 4px 10px;
+            background: #f0f0f0;
+            border: 1px solid #dee2e6;
+            border-radius: 20px;
+            font-size: 0.78rem;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .quick-tag:hover { background: var(--primary-color); color: white; border-color: var(--primary-color); }
+        .quick-tag .remove { margin-left: 3px; color: #dc3545; cursor: pointer; font-size: 0.7rem; }
+        .quick-tag:hover .remove { color: rgba(255,255,255,0.7); }
+
+        .btn-add-tag {
+            padding: 4px 10px;
+            border: 1px dashed #adb5bd;
+            background: none;
+            border-radius: 20px;
+            font-size: 0.78rem;
+            color: #6c757d;
+            cursor: pointer;
+        }
+
+        .btn-add-tag:hover { border-color: var(--primary-color); color: var(--primary-color); }
+
+        /* 날짜 필터 */
+        .date-filter {
+            margin-top: 12px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .date-filter label { font-size: 0.85rem; color: #6c757d; }
+
+        .date-input {
+            padding: 6px 10px;
+            border: 1.5px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 0.85rem;
+        }
+
+        .date-preset {
+            padding: 5px 11px;
+            border: 1px solid #e9ecef;
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.78rem;
+            transition: all 0.15s;
+        }
+
+        .date-preset:hover { background: var(--primary-color); color: white; border-color: var(--primary-color); }
+
+        /* 결과 내 재검색 */
+        .sub-search-wrap {
+            margin-top: 10px;
+            display: none;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .sub-search-wrap.show { display: flex; }
+
+        /* 컨테이너 */
+        .container-main {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 20px 40px;
+        }
+
+        /* 통계 카드 */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 18px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+
+        .stat-icon {
+            width: 45px;
+            height: 45px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+        }
+
+        .stat-icon.primary { background: rgba(67,97,238,0.1); color: var(--primary-color); }
+        .stat-icon.success { background: rgba(6,214,160,0.1); color: var(--success-color); }
+        .stat-icon.warning { background: rgba(255,209,102,0.15); color: #e6a817; }
+        .stat-icon.danger { background: rgba(239,71,111,0.1); color: var(--danger-color); }
+
+        .stat-value { font-size: 1.4rem; font-weight: 700; color: var(--dark-color); }
+        .stat-label { font-size: 0.78rem; color: #6c757d; }
+
+        /* 에러 요약 */
+        .error-summary {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 10px;
+            padding: 12px 18px;
+            margin-bottom: 20px;
+            font-size: 0.85rem;
+            display: none;
+        }
+
+        .error-summary.show { display: block; }
+
+        .error-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            margin: 2px 4px;
+            padding: 3px 8px;
+            background: rgba(239,71,111,0.1);
+            border-radius: 4px;
+            font-size: 0.75rem;
+        }
+
+        .error-item a { color: var(--danger-color); text-decoration: none; font-weight: 600; }
+        .error-item a:hover { text-decoration: underline; }
+
+        /* 결과 테이블 */
+        .results-card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            overflow: hidden;
+        }
+
+        .results-header {
+            padding: 15px 20px;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .results-title { font-size: 1.1rem; font-weight: 600; color: var(--dark-color); }
+        .results-title span { color: var(--primary-color); }
+
+        .results-actions { display: flex; gap: 8px; align-items: center; }
+
+        .btn-excel {
+            padding: 6px 14px;
+            background: #198754;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.82rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .btn-excel:hover { background: #157347; }
+
+        .table-container { max-height: 650px; overflow-y: auto; }
+
+        .data-table { width: 100%; border-collapse: collapse; }
+
+        .data-table th {
+            background: #f8f9fa;
+            padding: 12px 15px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.82rem;
+            color: #495057;
+            border-bottom: 2px solid #e9ecef;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+
+        .data-table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e9ecef;
+            font-size: 0.87rem;
+        }
+
+        .data-table tr:hover { background: #f8f9fa; }
+
+        .source-badge {
+            display: inline-block;
+            padding: 3px 9px;
+            background: rgba(67,97,238,0.1);
+            color: var(--primary-color);
+            border-radius: 20px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .title-link { color: var(--dark-color); text-decoration: none; transition: color 0.2s; }
+        .title-link:hover { color: var(--primary-color); }
+
+        /* 페이지네이션 */
+        .pagination-wrapper {
+            padding: 15px 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .page-btn {
+            padding: 7px 13px;
+            border: 1px solid #e9ecef;
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.82rem;
+            transition: all 0.2s;
+        }
+
+        .page-btn:hover, .page-btn.active {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+
+        .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        /* 로딩 */
+        .loading-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255,255,255,0.95);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
+
+        .loading-overlay.show { display: flex; }
+
+        .spinner {
+            width: 55px; height: 55px;
+            border: 4px solid #e9ecef;
+            border-top-color: var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .loading-text { margin-top: 18px; font-size: 1.05rem; color: var(--dark-color); }
+        .loading-progress { margin-top: 8px; font-size: 0.85rem; color: #6c757d; }
+
+        /* 빈 상태 */
+        .empty-state {
+            text-align: center;
+            padding: 70px 20px;
+            color: #6c757d;
+        }
+
+        .empty-state i { font-size: 4.5rem; margin-bottom: 15px; opacity: 0.2; }
+        .empty-state h4 { margin-bottom: 8px; color: var(--dark-color); }
 
         /* 토스트 */
-        .toast-container {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            z-index: 3000;
-        }
+        .toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 3000; }
 
         .toast {
             background: var(--dark-color);
             color: white;
-            padding: 15px 20px;
+            padding: 12px 18px;
             border-radius: 8px;
-            margin-top: 10px;
+            margin-top: 8px;
             animation: slideIn 0.3s ease;
+            font-size: 0.88rem;
         }
 
         @keyframes slideIn {
@@ -422,9 +413,10 @@
             to { transform: translateX(0); opacity: 1; }
         }
 
-        .table-container {
-            max-height: 600px;
-            overflow-y: auto;
+        @media (max-width: 768px) {
+            .search-box { flex-direction: column; }
+            .btn-search { justify-content: center; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
         }
     </style>
 </head>
@@ -435,75 +427,122 @@
             <a href="/"><i class="bi bi-grid"></i> 개별 검색</a>
         </div>
         <h1><i class="bi bi-search"></i> 통합 검색</h1>
-        <p>모든 크롤러에서 한번에 검색합니다</p>
+        <p>{{ crawlers|length }}개 크롤러에서 한번에 검색합니다</p>
     </header>
 
     <!-- 검색 영역 -->
     <div class="search-section">
         <div class="search-box">
-            <input type="text" class="search-input" id="searchKeyword" placeholder="검색어를 입력하세요..." onkeypress="handleKeyPress(event)">
+            <input type="text" class="search-input" id="searchKeyword" placeholder="검색어를 입력하세요..." onkeypress="if(event.key==='Enter') performSearch()">
             <button class="btn-search" id="searchBtn" onclick="performSearch()">
                 <i class="bi bi-search"></i> 전체 검색
             </button>
         </div>
 
-        <!-- 날짜 필터 -->
-        <div class="date-filter" style="margin-top: 20px; display: flex; gap: 15px; justify-content: center; align-items: center; flex-wrap: wrap;">
-            <label style="font-size: 0.9rem; color: #6c757d;">
-                <i class="bi bi-calendar3"></i> 기간:
-            </label>
-            <input type="date" id="startDate" class="date-input" autocomplete="off" style="padding: 8px 12px; border: 2px solid #e9ecef; border-radius: 8px; font-size: 0.9rem;">
-            <span style="color: #6c757d;">~</span>
-            <input type="date" id="endDate" class="date-input" autocomplete="off" style="padding: 8px 12px; border: 2px solid #e9ecef; border-radius: 8px; font-size: 0.9rem;">
-            <div style="display: flex; gap: 8px;">
-                <button onclick="setDateRange(7)" class="date-preset" style="padding: 6px 12px; border: 1px solid #e9ecef; background: white; border-radius: 6px; cursor: pointer; font-size: 0.8rem;">1주일</button>
-                <button onclick="setDateRange(30)" class="date-preset" style="padding: 6px 12px; border: 1px solid #e9ecef; background: white; border-radius: 6px; cursor: pointer; font-size: 0.8rem;">1개월</button>
-                <button onclick="setDateRange(90)" class="date-preset" style="padding: 6px 12px; border: 1px solid #e9ecef; background: white; border-radius: 6px; cursor: pointer; font-size: 0.8rem;">3개월</button>
-                <button onclick="clearDateFilter()" class="date-preset" style="padding: 6px 12px; border: 1px solid #e9ecef; background: white; border-radius: 6px; cursor: pointer; font-size: 0.8rem;">전체</button>
+        <!-- 빠른 검색어 -->
+        <div class="quick-search-section">
+            <span class="label"><i class="bi bi-lightning"></i> 빠른 검색:</span>
+            <div id="quickSearchTags"></div>
+            <button class="btn-add-tag" onclick="addQuickSearch()"><i class="bi bi-plus"></i> 추가</button>
+        </div>
+
+        <!-- 지역 그룹 선택 -->
+        <div style="margin-top: 14px;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                <span style="font-size: 0.82rem; color: #6c757d; white-space: nowrap;"><i class="bi bi-geo-alt"></i> 검색 지역:</span>
+                <button onclick="toggleAllGroups(true)" style="padding: 3px 10px; border: 1px solid #dee2e6; background: white; border-radius: 5px; font-size: 0.72rem; cursor: pointer;">전체 선택</button>
+                <button onclick="toggleAllGroups(false)" style="padding: 3px 10px; border: 1px solid #dee2e6; background: white; border-radius: 5px; font-size: 0.72rem; cursor: pointer;">전체 해제</button>
+            </div>
+            <div id="regionCheckboxes" style="display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;">
+                {% for group, cids in crawler_groups.items() %}
+                <label style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border: 1.5px solid #dee2e6; border-radius: 8px; font-size: 0.78rem; cursor: pointer; transition: all 0.15s; background: white;"
+                       onmouseover="this.style.borderColor='#4361ee'" onmouseout="this.style.borderColor=this.querySelector('input').checked?'#4361ee':'#dee2e6'">
+                    <input type="checkbox" class="region-check" value="{{ group }}" checked
+                           onchange="updateRegionStyle(this)" style="accent-color: #4361ee;">
+                    <span>{{ group }}</span>
+                    <span style="color: #adb5bd; font-size: 0.68rem;">({{ cids|length }})</span>
+                </label>
+                {% endfor %}
             </div>
         </div>
 
-        <div class="search-options" style="margin-top: 15px;">
-            <label>
-                <input type="checkbox" id="optNara" checked> 나라장터
-            </label>
-            <label>
-                <input type="checkbox" id="optAlio" checked> 알리오
-            </label>
-            <label>
-                <input type="checkbox" id="optAlioItem" checked> 알리오 물자
-            </label>
-            <label>
-                <input type="checkbox" id="optLH" checked> LH 파트너몰
-            </label>
-            <label>
-                <input type="checkbox" id="optGTDC" checked> 강릉관광개발공사
-            </label>
-            <label>
-                <input type="checkbox" id="optGDCO" checked> 강원개발공사
-            </label>
-            <label>
-                <input type="checkbox" id="optGMDC" checked> 거제해양관광개발공사
-            </label>
-            <label>
-                <input type="checkbox" id="optGNDC" checked> 경남개발공사
-            </label>
+        <!-- 날짜 필터 -->
+        <div class="date-filter">
+            <label><i class="bi bi-calendar3"></i> 기간:</label>
+            <input type="date" id="startDate" class="date-input" autocomplete="off">
+            <span style="color: #6c757d;">~</span>
+            <input type="date" id="endDate" class="date-input" autocomplete="off">
+            <div style="display: flex; gap: 6px;">
+                <button onclick="setDateRange(7)" class="date-preset">1주일</button>
+                <button onclick="setDateRange(30)" class="date-preset">1개월</button>
+                <button onclick="setDateRange(90)" class="date-preset">3개월</button>
+                <button onclick="clearDateFilter()" class="date-preset">전체</button>
+            </div>
+        </div>
+
+        <!-- 결과 내 재검색 -->
+        <div class="sub-search-wrap" id="subSearchWrap">
+            <span style="font-size: 0.82rem; color: #6c757d;"><i class="bi bi-funnel"></i> 결과 내 검색:</span>
+            <input type="text" id="subSearchKeyword" placeholder="결과 내에서 추가 검색..."
+                style="padding: 5px 10px; border: 1px solid #dee2e6; border-radius: 6px; font-size: 0.82rem; width: 200px;"
+                oninput="applySubSearch()">
+            <button onclick="clearSubSearch()" class="btn btn-sm btn-outline-secondary" style="font-size: 0.75rem;">초기화</button>
         </div>
     </div>
 
-    <!-- 메인 컨테이너 -->
+    <!-- 메인 -->
     <div class="container-main">
-        <!-- 요약 카드 (검색 후 표시) -->
-        <div class="summary-grid" id="summaryGrid" style="display: none;"></div>
+        <!-- 통계 카드 -->
+        <div class="stats-grid" id="statsGrid" style="display: none;">
+            <div class="stat-card">
+                <div class="stat-icon primary"><i class="bi bi-building"></i></div>
+                <div>
+                    <div class="stat-value" id="statCrawlers">{{ crawlers|length }}</div>
+                    <div class="stat-label">검색 크롤러</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon success"><i class="bi bi-file-earmark-text"></i></div>
+                <div>
+                    <div class="stat-value" id="statResults">0</div>
+                    <div class="stat-label">검색 결과</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon warning"><i class="bi bi-check-circle"></i></div>
+                <div>
+                    <div class="stat-value" id="statSuccess">0</div>
+                    <div class="stat-label">성공 크롤러</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon danger"><i class="bi bi-exclamation-triangle"></i></div>
+                <div>
+                    <div class="stat-value" id="statErrors">0</div>
+                    <div class="stat-label">에러 크롤러</div>
+                </div>
+            </div>
+        </div>
 
-        <!-- 결과 섹션 -->
-        <div class="results-section" id="resultsSection" style="display: none;">
+        <!-- 에러 상세 -->
+        <div class="error-summary" id="errorSummary">
+            <strong><i class="bi bi-exclamation-triangle"></i> 에러 발생 크롤러:</strong>
+            <div id="errorList" style="margin-top: 6px;"></div>
+        </div>
+
+        <!-- 결과 테이블 -->
+        <div class="results-card" id="resultsSection" style="display: none;">
             <div class="results-header">
-                <h3 class="results-title">
-                    검색 결과: <span id="totalCount">0</span>건
-                </h3>
-                <div class="tab-buttons" id="tabButtons">
-                    <button class="tab-btn active" onclick="filterResults('all')">전체</button>
+                <h5 class="results-title"><i class="bi bi-table"></i> 검색 결과: <span id="totalCount">0</span>건</h5>
+                <div class="results-actions">
+                    <select class="form-select form-select-sm" id="pageSize" onchange="changePageSize()" style="width: 110px; font-size: 0.82rem;">
+                        <option value="20" selected>20개씩</option>
+                        <option value="50">50개씩</option>
+                        <option value="100">100개씩</option>
+                    </select>
+                    <button class="btn-excel" onclick="downloadExcel()">
+                        <i class="bi bi-file-earmark-spreadsheet"></i> 엑셀
+                    </button>
                 </div>
             </div>
 
@@ -511,8 +550,9 @@
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th style="width: 120px;">출처</th>
+                            <th style="width: 50px;">번호</th>
                             <th>제목</th>
+                            <th style="width: 130px;">출처</th>
                             <th style="width: 100px;">날짜</th>
                         </tr>
                     </thead>
@@ -527,7 +567,7 @@
         <div class="empty-state" id="emptyState">
             <i class="bi bi-search"></i>
             <h4>검색어를 입력하세요</h4>
-            <p>모든 크롤러에서 동시에 검색합니다</p>
+            <p>{{ crawlers|length }}개 크롤러에서 동시에 검색합니다</p>
         </div>
     </div>
 
@@ -535,83 +575,167 @@
     <div class="loading-overlay" id="loadingOverlay">
         <div class="spinner"></div>
         <div class="loading-text">검색 중...</div>
-        <div class="loading-progress" id="loadingProgress">9개 크롤러에서 검색 중</div>
+        <div class="loading-progress" id="loadingProgress">{{ crawlers|length }}개 크롤러에서 검색 중</div>
     </div>
 
     <!-- 토스트 -->
     <div class="toast-container" id="toastContainer"></div>
 
     <script>
-        // 상태
+        // ── 상태 ──
         let allResults = {};
         let summaryData = {};
-        let currentFilter = 'all';
+        let mergedData = [];
+        let filteredData = [];
         let currentPage = 1;
-        const pageSize = 30;
+        let pageSize = 20;
         let dateStart = null;
         let dateEnd = null;
-        let dateFilterEnabled = false;  // 날짜 필터 활성화 여부
+        let dateFilterEnabled = false;
 
-        // 크롤러 매핑
+        // ── 지역 그룹 매핑 (서버에서 주입) ──
+        const crawlerGroups = {
+            {% for group, cids in crawler_groups.items() %}
+            '{{ group }}': [{% for cid in cids %}'{{ cid }}',{% endfor %}],
+            {% endfor %}
+        };
+
+        // ── 크롤러 이름 매핑 (서버에서 주입) ──
         const crawlerNames = {
-            nara: '나라장터',
-            alio: '알리오 입찰',
-            alio_item: '알리오 물자',
-            lh: 'LH 파트너몰',
-            gtdc: '강릉관광',
-            gdco: '강원개발 공지',
-            gdco_bid: '강원개발 입찰',
-            gmdc: '거제해양',
-            gndc: '경남개발'
+            {% for key, info in crawlers.items() %}
+            '{{ key }}': '{{ info.name }}',
+            {% endfor %}
         };
 
-        const crawlerOptions = {
-            nara: 'optNara',
-            alio: 'optAlio',
-            alio_item: 'optAlioItem',
-            lh: 'optLH',
-            gtdc: 'optGTDC',
-            gdco: 'optGDCO',
-            gdco_bid: 'optGDCO',
-            gmdc: 'optGMDC',
-            gndc: 'optGNDC'
+        const crawlerUrls = {
+            {% for key, info in crawlers.items() %}
+            '{{ key }}': '{{ info.url }}',
+            {% endfor %}
         };
 
-        // 검색 실행
+        // ── 빠른 검색어 ──
+        const DEFAULT_QUICK_SEARCHES = [
+            '기본설계', '실시설계', '기술제안', '제안서', '신기술', '공법',
+            '특허', '발파', '미진동', '무진동', '절토', '토공', '토목',
+            '부지조성', '산업단지', '조성공사', '개발사업'
+        ];
+
+        function getQuickSearches() {
+            const saved = localStorage.getItem('quickSearches');
+            return saved ? JSON.parse(saved) : DEFAULT_QUICK_SEARCHES;
+        }
+
+        function saveQuickSearches(list) {
+            localStorage.setItem('quickSearches', JSON.stringify(list));
+        }
+
+        function renderQuickSearchTags() {
+            const tags = getQuickSearches();
+            document.getElementById('quickSearchTags').innerHTML = tags.map((kw, idx) =>
+                `<span class="quick-tag" onclick="quickSearch('${kw}')">
+                    ${kw}
+                    <i class="bi bi-x remove" onclick="event.stopPropagation(); removeQuickSearch(${idx})"></i>
+                </span>`
+            ).join('');
+        }
+
+        function quickSearch(keyword) {
+            document.getElementById('searchKeyword').value = keyword;
+            performSearch();
+        }
+
+        function addQuickSearch() {
+            const kw = prompt('추가할 검색어를 입력하세요:');
+            if (kw && kw.trim()) {
+                const list = getQuickSearches();
+                if (!list.includes(kw.trim())) {
+                    list.push(kw.trim());
+                    saveQuickSearches(list);
+                    renderQuickSearchTags();
+                }
+            }
+        }
+
+        function removeQuickSearch(idx) {
+            const list = getQuickSearches();
+            list.splice(idx, 1);
+            saveQuickSearches(list);
+            renderQuickSearchTags();
+        }
+
+        // ── 검색 ──
         async function performSearch() {
             const keyword = document.getElementById('searchKeyword').value.trim();
-            if (!keyword) {
-                showToast('검색어를 입력해주세요', 'warning');
-                return;
-            }
+            if (!keyword) { showToast('검색어를 입력해주세요', 'warning'); return; }
 
             showLoading(true);
             document.getElementById('searchBtn').disabled = true;
 
             try {
-                const response = await fetch(`/api/search_all?keyword=${encodeURIComponent(keyword)}&max_pages=5`);
+                let url = `/api/search_all?keyword=${encodeURIComponent(keyword)}&max_pages=5`;
+                const sd = document.getElementById('startDate').value;
+                const ed = document.getElementById('endDate').value;
+                if (sd) url += `&start_date=${sd}`;
+                if (ed) url += `&end_date=${ed}`;
+
+                // 선택된 지역의 크롤러 ID 수집
+                const selectedIds = getSelectedCrawlerIds();
+                if (selectedIds.length === 0) {
+                    showToast('검색할 지역을 선택해주세요', 'warning');
+                    showLoading(false);
+                    document.getElementById('searchBtn').disabled = false;
+                    return;
+                }
+                const totalCrawlers = Object.values(crawlerGroups).flat().length;
+                if (selectedIds.length < totalCrawlers) {
+                    url += `&crawler_ids=${selectedIds.join(',')}`;
+                }
+                document.getElementById('loadingProgress').textContent = `${selectedIds.length}개 크롤러에서 검색 중`;
+
+                const response = await fetch(url);
                 const data = await response.json();
 
                 if (data.success) {
                     allResults = data.results || {};
                     summaryData = data.summary || {};
 
-                    console.log('Search results:', allResults);
-                    console.log('Summary:', summaryData);
+                    // 데이터 병합
+                    mergedData = [];
+                    for (const [crawlerId, items] of Object.entries(allResults)) {
+                        if (Array.isArray(items)) {
+                            items.forEach(item => {
+                                mergedData.push({ ...item, _source: crawlerId });
+                            });
+                        }
+                    }
+                    mergedData.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+                    filteredData = [...mergedData];
 
-                    renderSummary();
-                    filterResults('all');
+                    // 통계
+                    const errorCount = Object.values(summaryData).filter(s => s.error).length;
+                    const successCount = Object.keys(summaryData).length - errorCount;
 
+                    document.getElementById('statResults').textContent = mergedData.length.toLocaleString();
+                    document.getElementById('statSuccess').textContent = successCount;
+                    document.getElementById('statErrors').textContent = errorCount;
+
+                    // 에러 상세
+                    renderErrors();
+
+                    // UI 표시
                     document.getElementById('emptyState').style.display = 'none';
-                    document.getElementById('summaryGrid').style.display = 'grid';
+                    document.getElementById('statsGrid').style.display = 'grid';
                     document.getElementById('resultsSection').style.display = 'block';
+                    document.getElementById('subSearchWrap').classList.add('show');
 
-                    showToast(`총 ${data.total_count}건의 결과를 찾았습니다`, 'success');
+                    currentPage = 1;
+                    renderTable();
+
+                    showToast(`총 ${mergedData.length.toLocaleString()}건의 결과를 찾았습니다 (${successCount}개 성공, ${errorCount}개 에러)`, 'success');
                 } else {
                     showToast(data.error || '검색 중 오류 발생', 'error');
                 }
             } catch (error) {
-                console.error('Search error:', error);
                 showToast('서버 통신 오류', 'error');
             } finally {
                 showLoading(false);
@@ -619,189 +743,214 @@
             }
         }
 
-        // 엔터키
-        function handleKeyPress(event) {
-            if (event.key === 'Enter') performSearch();
-        }
+        // ── 에러 상세 ──
+        function renderErrors() {
+            const errorEntries = Object.entries(summaryData).filter(([_, s]) => s.error);
+            const el = document.getElementById('errorSummary');
 
-        // 요약 렌더링
-        function renderSummary() {
-            const grid = document.getElementById('summaryGrid');
-            let html = '';
-
-            // 전체 카드
-            const totalCount = Object.values(allResults).reduce((sum, arr) => sum + arr.length, 0);
-            html += `
-                <div class="summary-card active" onclick="filterResults('all')">
-                    <div class="count">${totalCount}</div>
-                    <div class="name">전체</div>
-                </div>
-            `;
-
-            // 각 크롤러별 카드
-            for (const [id, info] of Object.entries(summaryData)) {
-                const hasError = info.error;
-                html += `
-                    <div class="summary-card ${hasError ? 'has-error' : ''}" data-crawler="${id}" onclick="filterResults('${id}')">
-                        <div class="count">${info.count}</div>
-                        <div class="name">${crawlerNames[id] || id}</div>
-                        ${hasError ? `<div class="error-badge">오류</div>` : ''}
-                    </div>
-                `;
-            }
-
-            grid.innerHTML = html;
-
-            // 탭 버튼 업데이트
-            const tabs = document.getElementById('tabButtons');
-            let tabHtml = `<button class="tab-btn active" onclick="filterResults('all')">전체 (${totalCount})</button>`;
-            for (const [id, info] of Object.entries(summaryData)) {
-                if (info.count > 0) {
-                    tabHtml += `<button class="tab-btn" data-crawler="${id}" onclick="filterResults('${id}')">${crawlerNames[id]} (${info.count})</button>`;
-                }
-            }
-            tabs.innerHTML = tabHtml;
-        }
-
-        // 필터링
-        function filterResults(filter) {
-            console.log('filterResults called with:', filter);
-            console.log('allResults keys:', Object.keys(allResults));
-            console.log('allResults[filter]:', allResults[filter] ? allResults[filter].length : 'undefined');
-
-            currentFilter = filter;
-            currentPage = 1;
-
-            // 카드 활성화
-            document.querySelectorAll('.summary-card').forEach(card => {
-                card.classList.remove('active');
-                if (filter === 'all' && !card.dataset.crawler) {
-                    card.classList.add('active');
-                } else if (card.dataset.crawler === filter) {
-                    card.classList.add('active');
-                }
-            });
-
-            // 탭 활성화
-            document.querySelectorAll('.tab-btn').forEach(btn => {
-                btn.classList.remove('active');
-                if (filter === 'all' && !btn.dataset.crawler) {
-                    btn.classList.add('active');
-                } else if (btn.dataset.crawler === filter) {
-                    btn.classList.add('active');
-                }
-            });
-
-            renderTable();
-        }
-
-        // 테이블 렌더링
-        function renderTable() {
-            const tbody = document.getElementById('tableBody');
-            let data = [];
-
-            // 데이터 수집
-            if (currentFilter === 'all') {
-                // 전체: 모든 결과 합치기
-                for (const [crawlerId, items] of Object.entries(allResults)) {
-                    if (Array.isArray(items)) {
-                        items.forEach(item => {
-                            data.push({ ...item, _source: crawlerId });
-                        });
-                    }
-                }
-                // 날짜순 정렬
-                data.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-            } else {
-                // 특정 크롤러 필터
-                const crawlerData = allResults[currentFilter];
-                if (Array.isArray(crawlerData) && crawlerData.length > 0) {
-                    data = crawlerData.map(item => ({
-                        ...item,
-                        _source: currentFilter
-                    }));
-                }
-            }
-
-            // 날짜 필터 적용 (명시적으로 활성화된 경우만)
-            console.log('Date filter check - enabled:', dateFilterEnabled, 'dateStart:', dateStart, 'dateEnd:', dateEnd);
-            if (dateFilterEnabled && (dateStart || dateEnd)) {
-                const beforeCount = data.length;
-                data = data.filter(item => isDateInRange(item.date));
-                console.log(`Date filter applied: ${beforeCount} -> ${data.length}`);
-            }
-
-            // 페이지네이션
-            const start = (currentPage - 1) * pageSize;
-            const pageData = data.slice(start, start + pageSize);
-
-            if (pageData.length === 0) {
-                tbody.innerHTML = `
-                    <tr>
-                        <td colspan="3" style="text-align: center; padding: 60px; color: #6c757d;">
-                            검색 결과가 없습니다
-                        </td>
-                    </tr>
-                `;
-                document.getElementById('pagination').innerHTML = '';
-                document.getElementById('totalCount').textContent = '0';
+            if (errorEntries.length === 0) {
+                el.classList.remove('show');
                 return;
             }
 
-            document.getElementById('totalCount').textContent = data.length.toLocaleString();
+            el.classList.add('show');
+            document.getElementById('errorList').innerHTML = errorEntries.map(([id, info]) => {
+                const url = crawlerUrls[id] || '#';
+                const name = crawlerNames[id] || id;
+                const reason = info.error.length > 40 ? info.error.substring(0, 40) + '...' : info.error;
+                return `<span class="error-item">
+                    <a href="${url}" target="_blank">${name}</a>
+                    <span style="color:#6c757d;">${reason}</span>
+                </span>`;
+            }).join('');
+        }
 
-            tbody.innerHTML = pageData.map(item => `
-                <tr>
-                    <td><span class="source-badge">${crawlerNames[item._source] || item._source}</span></td>
-                    <td>
-                        ${item.is_notice ? '<span class="notice-badge">공지</span>' : ''}
-                        ${item.link ? `<a href="${item.link}" target="_blank" class="title-link">${escapeHtml(item.title)}</a>` : escapeHtml(item.title)}
-                    </td>
-                    <td>${item.date || '-'}</td>
-                </tr>
-            `).join('');
+        // ── 결과 내 재검색 ──
+        function applySubSearch() {
+            const subKeyword = document.getElementById('subSearchKeyword').value.trim().toLowerCase();
+            if (!subKeyword) {
+                filteredData = [...mergedData];
+            } else {
+                filteredData = mergedData.filter(item =>
+                    (item.title && item.title.toLowerCase().includes(subKeyword)) ||
+                    (item.organization && item.organization.toLowerCase().includes(subKeyword)) ||
+                    (item.number && item.number.toLowerCase().includes(subKeyword))
+                );
+            }
+            currentPage = 1;
+            renderTable();
+        }
+
+        function clearSubSearch() {
+            document.getElementById('subSearchKeyword').value = '';
+            filteredData = [...mergedData];
+            currentPage = 1;
+            renderTable();
+        }
+
+        // ── 날짜 필터 ──
+        function setDateRange(days) {
+            const end = new Date();
+            const start = new Date();
+            start.setDate(start.getDate() - days);
+            document.getElementById('startDate').value = formatDate(start);
+            document.getElementById('endDate').value = formatDate(end);
+            dateFilterEnabled = true;
+            applyDateFilter();
+        }
+
+        function clearDateFilter() {
+            document.getElementById('startDate').value = '';
+            document.getElementById('endDate').value = '';
+            dateStart = null;
+            dateEnd = null;
+            dateFilterEnabled = false;
+            currentPage = 1;
+            renderTable();
+        }
+
+        function applyDateFilter() {
+            dateStart = document.getElementById('startDate').value || null;
+            dateEnd = document.getElementById('endDate').value || null;
+            if (dateStart || dateEnd) dateFilterEnabled = true;
+            currentPage = 1;
+            renderTable();
+        }
+
+        function formatDate(d) { return d.toISOString().split('T')[0]; }
+
+        function parseItemDate(dateStr) {
+            if (!dateStr) return null;
+            return dateStr.replace(/[./]/g, '-').substring(0, 10);
+        }
+
+        function isDateInRange(itemDate) {
+            if (!dateFilterEnabled || (!dateStart && !dateEnd)) return true;
+            const parsed = parseItemDate(itemDate);
+            if (!parsed) return false;  // 날짜 없으면 제외
+            if (dateStart && parsed < dateStart) return false;
+            if (dateEnd && parsed > dateEnd) return false;
+            return true;
+        }
+
+        // ── 테이블 렌더링 ──
+        function getDisplayData() {
+            let data = [...filteredData];
+            if (dateFilterEnabled && (dateStart || dateEnd)) {
+                data = data.filter(item => isDateInRange(item.date));
+            }
+            return data;
+        }
+
+        function renderTable() {
+            const data = getDisplayData();
+            const tbody = document.getElementById('tableBody');
+            const start = (currentPage - 1) * pageSize;
+            const pageData = data.slice(start, start + pageSize);
+
+            document.getElementById('totalCount').textContent = data.length.toLocaleString();
+            document.getElementById('statResults').textContent = data.length.toLocaleString();
+
+            if (pageData.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:50px; color:#6c757d;">검색 결과가 없습니다</td></tr>`;
+                document.getElementById('pagination').innerHTML = '';
+                return;
+            }
+
+            tbody.innerHTML = pageData.map((item, idx) => {
+                const num = data.length - start - idx;
+                const sourceName = crawlerNames[item._source] || item._source;
+                const link = item.url || item.link;
+                const titleHtml = link
+                    ? `<a href="${link}" target="_blank" class="title-link">${escapeHtml(item.title)}</a>`
+                    : escapeHtml(item.title);
+                const dateStr = item.date || '-';
+
+                return `<tr>
+                    <td style="color:#6c757d; font-size:0.8rem;">${num}</td>
+                    <td>${titleHtml}</td>
+                    <td><span class="source-badge">${sourceName}</span></td>
+                    <td style="font-size:0.82rem; color:#6c757d;">${dateStr}</td>
+                </tr>`;
+            }).join('');
 
             renderPagination(data.length);
         }
 
-        // 페이지네이션
+        // ── 페이지네이션 ──
         function renderPagination(total) {
             const totalPages = Math.ceil(total / pageSize);
-            const pagination = document.getElementById('pagination');
+            const el = document.getElementById('pagination');
 
-            if (totalPages <= 1) {
-                pagination.innerHTML = '';
-                return;
-            }
+            if (totalPages <= 1) { el.innerHTML = ''; return; }
 
-            let html = '';
-            html += `<button class="page-btn" onclick="goToPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}><i class="bi bi-chevron-left"></i></button>`;
+            let html = `<button class="page-btn" onclick="goToPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}><i class="bi bi-chevron-left"></i></button>`;
 
-            const start = Math.max(1, currentPage - 2);
-            const end = Math.min(totalPages, start + 4);
+            const start = Math.max(1, currentPage - 3);
+            const end = Math.min(totalPages, start + 6);
+
+            if (start > 1) html += `<button class="page-btn" onclick="goToPage(1)">1</button><span style="padding:0 5px;color:#adb5bd;">...</span>`;
 
             for (let i = start; i <= end; i++) {
                 html += `<button class="page-btn ${i === currentPage ? 'active' : ''}" onclick="goToPage(${i})">${i}</button>`;
             }
 
+            if (end < totalPages) html += `<span style="padding:0 5px;color:#adb5bd;">...</span><button class="page-btn" onclick="goToPage(${totalPages})">${totalPages}</button>`;
+
             html += `<button class="page-btn" onclick="goToPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}><i class="bi bi-chevron-right"></i></button>`;
 
-            pagination.innerHTML = html;
+            el.innerHTML = html;
         }
 
         function goToPage(page) {
-            const total = currentFilter === 'all'
-                ? Object.values(allResults).reduce((sum, arr) => sum + arr.length, 0)
-                : (allResults[currentFilter] || []).length;
+            const total = getDisplayData().length;
             const totalPages = Math.ceil(total / pageSize);
-
             if (page < 1 || page > totalPages) return;
             currentPage = page;
             renderTable();
             document.querySelector('.table-container').scrollTo({ top: 0, behavior: 'smooth' });
         }
 
-        // 유틸
+        function changePageSize() {
+            pageSize = parseInt(document.getElementById('pageSize').value);
+            currentPage = 1;
+            renderTable();
+        }
+
+        // ── 엑셀 다운로드 ──
+        function downloadExcel() {
+            const data = getDisplayData();
+            if (data.length === 0) { showToast('다운로드할 데이터가 없습니다', 'warning'); return; }
+
+            const keyword = document.getElementById('searchKeyword').value.trim();
+            const rows = data.map((item, idx) => ({
+                '번호': data.length - idx,
+                '제목': item.title || '',
+                '출처': crawlerNames[item._source] || item._source,
+                '날짜': item.date || '',
+                '링크': item.url || item.link || '',
+            }));
+
+            const ws = XLSX.utils.json_to_sheet(rows);
+            ws['!cols'] = [
+                { wch: 8 },
+                { wch: 60 },
+                { wch: 20 },
+                { wch: 12 },
+                { wch: 50 },
+            ];
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, '통합검색결과');
+
+            const now = new Date();
+            const dateStr = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
+            XLSX.writeFile(wb, `통합검색_${keyword}_${dateStr}.xlsx`);
+
+            showToast(`${data.length}건 엑셀 다운로드 완료`, 'success');
+        }
+
+        // ── 유틸 ──
         function showLoading(show) {
             document.getElementById('loadingOverlay').classList.toggle('show', show);
         }
@@ -814,7 +963,7 @@
             toast.style.color = type === 'warning' ? '#333' : 'white';
             toast.innerHTML = `<i class="bi bi-${type === 'success' ? 'check-circle' : type === 'error' ? 'x-circle' : 'info-circle'}"></i> ${message}`;
             container.appendChild(toast);
-            setTimeout(() => toast.remove(), 3000);
+            setTimeout(() => toast.remove(), 4000);
         }
 
         function escapeHtml(text) {
@@ -824,88 +973,45 @@
             return div.innerHTML;
         }
 
-        // 날짜 필터 함수
-        function setDateRange(days) {
-            const end = new Date();
-            const start = new Date();
-            start.setDate(start.getDate() - days);
-
-            document.getElementById('startDate').value = formatDate(start);
-            document.getElementById('endDate').value = formatDate(end);
-
-            dateFilterEnabled = true;  // 명시적 활성화
-            applyDateFilter();
+        // ── 지역 그룹 ──
+        function getSelectedCrawlerIds() {
+            const checked = document.querySelectorAll('.region-check:checked');
+            const ids = [];
+            checked.forEach(cb => {
+                const group = cb.value;
+                if (crawlerGroups[group]) {
+                    ids.push(...crawlerGroups[group]);
+                }
+            });
+            return ids;
         }
 
-        function clearDateFilter() {
-            document.getElementById('startDate').value = '';
-            document.getElementById('endDate').value = '';
-            dateStart = null;
-            dateEnd = null;
-            dateFilterEnabled = false;  // 비활성화
-            renderTable();
+        function toggleAllGroups(checked) {
+            document.querySelectorAll('.region-check').forEach(cb => {
+                cb.checked = checked;
+                updateRegionStyle(cb);
+            });
         }
 
-        function applyDateFilter() {
-            const startVal = document.getElementById('startDate').value;
-            const endVal = document.getElementById('endDate').value;
-
-            dateStart = startVal ? startVal : null;
-            dateEnd = endVal ? endVal : null;
-
-            // 날짜가 입력되면 필터 활성화
-            if (dateStart || dateEnd) {
-                dateFilterEnabled = true;
+        function updateRegionStyle(cb) {
+            const label = cb.closest('label');
+            if (cb.checked) {
+                label.style.borderColor = '#4361ee';
+                label.style.background = 'rgba(67, 97, 238, 0.05)';
+            } else {
+                label.style.borderColor = '#dee2e6';
+                label.style.background = 'white';
             }
-
-            currentPage = 1;
-            renderTable();
         }
 
-        function formatDate(date) {
-            return date.toISOString().split('T')[0];
-        }
-
-        function parseItemDate(dateStr) {
-            if (!dateStr) return null;
-            // 다양한 날짜 형식 처리: 2024-01-15, 2024.01.15, 2024/01/15
-            const cleaned = dateStr.replace(/[./]/g, '-').substring(0, 10);
-            return cleaned;
-        }
-
-        function isDateInRange(itemDate) {
-            if (!dateStart && !dateEnd) return true;
-
-            const parsed = parseItemDate(itemDate);
-            if (!parsed) return true; // 날짜가 없으면 필터링 안함
-
-            if (dateStart && parsed < dateStart) return false;
-            if (dateEnd && parsed > dateEnd) return false;
-
-            return true;
-        }
-
-        // 페이지 로드 시 날짜 필터 초기화 및 이벤트 리스너 등록
-        function initDateFilter() {
-            dateStart = null;
-            dateEnd = null;
-            dateFilterEnabled = false;
-            document.getElementById('startDate').value = '';
-            document.getElementById('endDate').value = '';
-            console.log('Date filter initialized - enabled:', dateFilterEnabled);
-        }
-
-        // 즉시 초기화
-        initDateFilter();
-
-        // 지연 후 이벤트 리스너 등록 (브라우저 자동완성 이후)
-        setTimeout(function() {
-            initDateFilter();  // 한번 더 초기화
-            // 이벤트 리스너는 초기화 이후에 등록
+        // ── 초기화 ──
+        document.addEventListener('DOMContentLoaded', () => {
+            renderQuickSearchTags();
             document.getElementById('startDate').addEventListener('change', applyDateFilter);
             document.getElementById('endDate').addEventListener('change', applyDateFilter);
-            console.log('Date filter event listeners attached');
-        }, 200);
+            // 체크박스 초기 스타일
+            document.querySelectorAll('.region-check').forEach(cb => updateRegionStyle(cb));
+        });
     </script>
 </body>
 </html>
