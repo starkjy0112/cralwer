@@ -7,6 +7,7 @@ Target: https://ghdc.or.kr/sub.html?code=08_05&Radd=08_05
 상세 페이지에서 날짜 병렬 조회
 """
 import re
+from datetime import datetime, timedelta
 import requests
 from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
@@ -180,6 +181,16 @@ class GhdcCrawler:
 
         # 상세 페이지에서 날짜를 병렬로 가져오기
         self._fetch_dates_parallel(results)
+
+
+        # 날짜 필터 (기본: 최근 30일)
+        if not start_date:
+            start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+        if not end_date:
+            end_date = datetime.now().strftime("%Y-%m-%d")
+        results = [_item for _item in results
+                     if (lambda d: d and start_date <= d <= end_date)(
+                         (_item.get("date") or "").replace(".", "-").replace("/", "-")[:10])]
 
         return results
 

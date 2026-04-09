@@ -15,6 +15,7 @@ Dates are only available on individual detail pages.
 from __future__ import annotations
 
 import re
+from datetime import datetime, timedelta
 import logging
 import requests
 from requests.adapters import HTTPAdapter
@@ -238,7 +239,7 @@ class JBDCCrawler:
 
         Returns:
             A list of dicts, each containing:
-                - title (str): Post title
+                - title (str, start_date=None, end_date=None): Post title
                 - date (str): Empty string (not available in unified search)
                 - url (str): Full URL to the detail page
                 - organization (str): Board category (e.g., 공지사항, 입찰공고)
@@ -269,6 +270,16 @@ class JBDCCrawler:
         if limited_results:
             logger.info("날짜 조회 시작 (%d건, %d workers)...", len(limited_results), self.WORKERS)
             self._fetch_dates_parallel(limited_results)
+
+
+        # 날짜 필터 (기본: 최근 30일)
+        if not start_date:
+            start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+        if not end_date:
+            end_date = datetime.now().strftime("%Y-%m-%d")
+        limited_results = [_item for _item in limited_results
+                     if (lambda d: d and start_date <= d <= end_date)(
+                         (_item.get("date") or "").replace(".", "-").replace("/", "-")[:10])]
 
         return limited_results
 

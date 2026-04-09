@@ -4,6 +4,7 @@ LH 기술혁신파트너몰 - 자재·공법 심의 크롤러
 POST 요청 + HTML 파싱 방식
 """
 import asyncio
+from datetime import datetime, timedelta
 import aiohttp
 from bs4 import BeautifulSoup
 
@@ -98,7 +99,7 @@ class LHCrawler:
 
         return results
 
-    async def _search_async(self, keyword: str = "", search_item: str = "", max_pages: int = 100):
+    async def _search_async(self, keyword: str = "", search_item: str = "", max_pages: int = 100, start_date=None, end_date=None):
         """비동기 검색 - 빈 페이지 발견시 조기 종료"""
         all_results = []
         semaphore = asyncio.Semaphore(self.concurrency)
@@ -150,9 +151,19 @@ class LHCrawler:
                 page_no = batch_end
 
         print(f"[LH] 완료: 총 {len(all_results)}건")
+
+        # 날짜 필터 (기본: 최근 30일)
+        if not start_date:
+            start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+        if not end_date:
+            end_date = datetime.now().strftime("%Y-%m-%d")
+        all_results = [_item for _item in all_results
+                     if (lambda d: d and start_date <= d <= end_date)(
+                         (_item.get("date") or "").replace(".", "-").replace("/", "-")[:10])]
+
         return all_results
 
-    def search(self, keyword: str = "", search_item: str = "", max_pages: int = 100):
+    def search(self, keyword: str = "", search_item: str = "", max_pages: int = 100, start_date=None, end_date=None):
         """
         LH 자재·공법 심의 검색
 
@@ -164,7 +175,7 @@ class LHCrawler:
         Returns:
             검색 결과 리스트
         """
-        return asyncio.run(self._search_async(keyword, search_item, max_pages))
+        return asyncio.run(self._search_async(keyword, search_item, max_pages, start_date=start_date, end_date=end_date))
 
 
 def search_lh(keyword: str = "", max_pages: int = 100):

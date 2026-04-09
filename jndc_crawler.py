@@ -13,6 +13,7 @@ Search mechanism:
 """
 
 import re
+from datetime import datetime, timedelta
 import logging
 import requests
 from requests.adapters import HTTPAdapter
@@ -213,7 +214,7 @@ class JNDCCrawler:
 
         Returns:
             A list of dicts, each containing:
-                - title (str): Post title.
+                - title (str, start_date=None, end_date=None): Post title.
                 - date (str): Registration date (YYYY-MM-DD).
                 - url (str): Full URL to the detail page.
                 - organization (str): Writer/author name if available.
@@ -283,6 +284,16 @@ class JNDCCrawler:
                 done += 1
                 if done % 20 == 0:
                     logger.info("  Detail progress: %d/%d", done, len(all_items))
+
+
+        # 날짜 필터 (기본: 최근 30일)
+        if not start_date:
+            start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+        if not end_date:
+            end_date = datetime.now().strftime("%Y-%m-%d")
+        all_items = [_item for _item in all_items
+                     if (lambda d: d and start_date <= d <= end_date)(
+                         (_item.get("date") or "").replace(".", "-").replace("/", "-")[:10])]
 
         return all_items
 

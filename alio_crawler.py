@@ -6,6 +6,8 @@
 import asyncio
 import aiohttp
 import time
+import re
+from datetime import datetime, timedelta
 import requests
 from requests.adapters import HTTPAdapter
 from playwright.async_api import async_playwright
@@ -90,7 +92,7 @@ class AlioCrawler:
             print(f"[오류] 페이지 {page_no}: {e}")
             return page_no, None
 
-    async def _search_async(self, keyword: str = "", max_pages: int = 1):
+    async def _search_async(self, keyword: str = "", max_pages: int = 1, start_date=None, end_date=None):
         """비동기 검색"""
         # 쿠키 없으면 획득 (캐시 우선 확인)
         if not self.cookies:
@@ -171,9 +173,19 @@ class AlioCrawler:
                 })
 
         print(f"[완료] 총 {len(results)}건")
+
+        # 날짜 필터 (기본: 최근 30일)
+        if not start_date:
+            start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+        if not end_date:
+            end_date = datetime.now().strftime("%Y-%m-%d")
+        results = [_item for _item in results
+                     if (lambda d: d and start_date <= d <= end_date)(
+                         (_item.get("date") or "").replace(".", "-").replace("/", "-")[:10])]
+
         return results
 
-    def search(self, keyword: str = "", max_pages: int = 1):
+    def search(self, keyword: str = "", max_pages: int = 1, start_date=None, end_date=None):
         """
         알리오 입찰공고 검색 (동기 래퍼)
 
@@ -184,7 +196,7 @@ class AlioCrawler:
         Returns:
             검색 결과 리스트
         """
-        return asyncio.run(self._search_async(keyword, max_pages))
+        return asyncio.run(self._search_async(keyword, max_pages, start_date=start_date, end_date=end_date))
 
 
 def search_alio(keyword: str = "", max_pages: int = 1):

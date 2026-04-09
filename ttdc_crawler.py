@@ -8,6 +8,7 @@ ASP.NET WebForms 기반 (VIEWSTATE + __doPostBack 방식).
 페이지 이동: __doPostBack('dataPager$ctl01$ctlXX', '') 방식.
 """
 import re
+from datetime import datetime, timedelta
 import requests
 from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
@@ -90,7 +91,7 @@ class TTDCCrawler:
                 targets[int(text)] = m.group(1)
         return targets
 
-    def search(self, keyword="", max_pages=1000):
+    def search(self, keyword="", max_pages=1000, start_date=None, end_date=None):
         """입찰정보를 검색합니다."""
         # 1단계: 초기 페이지 GET
         resp = self.session.get(BOARD_URL, timeout=15)
@@ -161,6 +162,16 @@ class TTDCCrawler:
 
         all_items.sort(key=lambda x: x["date"], reverse=True)
         print(f"[통영관광개발공사] 완료: 총 {len(all_items)}건")
+
+        # 날짜 필터 (기본: 최근 30일)
+        if not start_date:
+            start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+        if not end_date:
+            end_date = datetime.now().strftime("%Y-%m-%d")
+        all_items = [_item for _item in all_items
+                     if (lambda d: d and start_date <= d <= end_date)(
+                         (_item.get("date") or "").replace(".", "-").replace("/", "-")[:10])]
+
         return all_items
 
 

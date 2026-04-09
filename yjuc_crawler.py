@@ -6,6 +6,7 @@ GET 기반, 게시판 검색 (게시판별 페이지네이션 + URL 중복제거
 """
 
 import re
+from datetime import datetime, timedelta
 import requests
 from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
@@ -114,7 +115,7 @@ class YJUCCrawler:
 
         return first_items, board_pages
 
-    def search(self, keyword="", max_pages=100):
+    def search(self, keyword="", max_pages=100, start_date=None, end_date=None):
         if not keyword:
             print("[양주도시공사] 통합검색은 키워드가 필요합니다")
             return []
@@ -158,6 +159,16 @@ class YJUCCrawler:
         all_items.sort(key=lambda x: x["date"], reverse=True)
 
         print(f"[양주도시공사] 완료: 총 {len(all_items)}건")
+
+        # 날짜 필터 (기본: 최근 30일)
+        if not start_date:
+            start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+        if not end_date:
+            end_date = datetime.now().strftime("%Y-%m-%d")
+        all_items = [_item for _item in all_items
+                     if (lambda d: d and start_date <= d <= end_date)(
+                         (_item.get("date") or "").replace(".", "-").replace("/", "-")[:10])]
+
         return all_items
 
 

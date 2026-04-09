@@ -7,6 +7,7 @@ Target URL: https://www.isdc.co.kr/guidance/search.asp
 """
 
 import re
+from datetime import datetime, timedelta
 import requests
 from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
@@ -220,7 +221,7 @@ class ISDCCrawler:
         if big_boards:
             with ThreadPoolExecutor(max_workers=len(big_boards)) as executor:
                 futures = {
-                    executor.submit(self._fetch_board_all, bbs_no, name, keyword): name
+                    executor.submit(self._fetch_board_all, bbs_no, name, keyword, start_date=None, end_date=None): name
                     for bbs_no, name in big_boards
                 }
                 for future in as_completed(futures):
@@ -231,7 +232,17 @@ class ISDCCrawler:
                     except Exception:
                         pass
 
-        return small_results + big_results
+        _final_results = small_results + big_results
+        # 날짜 필터 (기본: 최근 30일)
+        if not start_date:
+            start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+        if not end_date:
+            end_date = datetime.now().strftime("%Y-%m-%d")
+        _final_results = [_item for _item in _final_results
+                     if (lambda d: d and start_date <= d <= end_date)(
+                         (_item.get("date") or "").replace(".", "-").replace("/", "-")[:10])]
+
+        return _final_results
 
 
 def main():

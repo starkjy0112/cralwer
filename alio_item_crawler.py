@@ -4,6 +4,7 @@
 344개 기관별 입찰공고 검색 (async 병렬 처리)
 """
 import asyncio
+from datetime import datetime, timedelta
 import aiohttp
 from playwright.async_api import async_playwright
 
@@ -165,7 +166,7 @@ class AlioItemCrawler:
 
         return results
 
-    async def _search_async(self, keyword: str = "", max_pages: int = 100):
+    async def _search_async(self, keyword: str = "", max_pages: int = 100, start_date=None, end_date=None):
         """모든 기관에서 키워드 검색"""
         if not self.cookies:
             print("[1] 쿠키 획득 중...")
@@ -198,9 +199,19 @@ class AlioItemCrawler:
                 all_results.extend(results)
 
         print(f"[완료] 총 {len(all_results)}건")
+
+        # 날짜 필터 (기본: 최근 30일)
+        if not start_date:
+            start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+        if not end_date:
+            end_date = datetime.now().strftime("%Y-%m-%d")
+        all_results = [_item for _item in all_results
+                     if (lambda d: d and start_date <= d <= end_date)(
+                         (_item.get("date") or "").replace(".", "-").replace("/", "-")[:10])]
+
         return all_results
 
-    def search(self, keyword: str = "", max_pages: int = 100):
+    def search(self, keyword: str = "", max_pages: int = 100, start_date=None, end_date=None):
         """
         물자구매 입찰공고 검색
 
@@ -211,7 +222,7 @@ class AlioItemCrawler:
         Returns:
             검색 결과 리스트
         """
-        return asyncio.run(self._search_async(keyword, max_pages))
+        return asyncio.run(self._search_async(keyword, max_pages, start_date=start_date, end_date=end_date))
 
 
 def search_alio_item(keyword: str = "", max_pages: int = 100):
