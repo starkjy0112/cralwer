@@ -127,14 +127,9 @@ class CBDCCrawler:
         if not end_date:
             end_date = datetime.now().strftime("%Y-%m-%d")
 
-        filtered = []
-        for item in all_items:
-            d = (item.get("date") or "").replace(".", "-").replace("/", "-")[:10]
-            if not d:
-                continue
-            if start_date <= d <= end_date:
-                filtered.append(item)
-        all_items = filtered
+        all_items = [item for item in all_items
+                     if (lambda d: d and start_date <= d <= end_date)(
+                         (item.get("date") or "").replace(".", "-").replace("/", "-")[:10])]
 
         all_items.sort(key=lambda x: x["date"], reverse=True)
         print(f"[충북개발공사] 완료: 총 {len(all_items)}건")

@@ -144,12 +144,9 @@ class ISDCNoticeCrawler:
             start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
         if not end_date:
             end_date = datetime.now().strftime("%Y-%m-%d")
-        _filtered = []
-        for _item in all_rows:
-            _d = (_item.get("date") or "").replace(".", "-").replace("/", "-")[:10]
-            if _d and start_date <= _d <= end_date:
-                _filtered.append(_item)
-        all_rows = _filtered
+        all_rows = [_item for _item in all_rows
+                     if (lambda d: d and start_date <= d <= end_date)(
+                         (_item.get("date") or "").replace(".", "-").replace("/", "-")[:10])]
 
         return all_rows
 

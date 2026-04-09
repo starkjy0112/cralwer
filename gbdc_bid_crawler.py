@@ -130,12 +130,9 @@ class GBDCBidCrawler:
             start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
         if not end_date:
             end_date = datetime.now().strftime("%Y-%m-%d")
-        _filtered = []
-        for _item in sorted_results:
-            _d = (_item.get("date") or "").replace(".", "-").replace("/", "-")[:10]
-            if _d and start_date <= _d <= end_date:
-                _filtered.append(_item)
-        sorted_results = _filtered
+        sorted_results = [_item for _item in sorted_results
+                     if (lambda d: d and start_date <= d <= end_date)(
+                         (_item.get("date") or "").replace(".", "-").replace("/", "-")[:10])]
 
         return sorted_results
 
