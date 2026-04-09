@@ -8,7 +8,7 @@ import math
 import re
 import requests
 from requests.adapters import HTTPAdapter
-from datetime import datetime
+from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
 

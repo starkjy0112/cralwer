@@ -13,7 +13,7 @@ import re
 import requests
 from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
-from datetime import datetime
+from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
