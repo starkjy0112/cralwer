@@ -224,7 +224,7 @@ class JBDCCrawler:
                 if done % 50 == 0:
                     logger.info("  날짜 조회 진행: %d/%d", done, len(urls))
 
-    def search(self, keyword: str = "", max_pages: int = 10) -> List[Dict]:
+    def search(self, keyword: str = "", max_pages: int = 10, start_date=None, end_date=None) -> List[Dict]:
         """
         Search the 전북개발공사 unified board search (통합검색 > 게시판).
 

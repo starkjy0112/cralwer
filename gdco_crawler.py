@@ -77,7 +77,7 @@ class GDCOCrawler:
 
         return results
 
-    def search(self, keyword: str = "", search_field: str = "all", max_pages: int = 100):
+    def search(self, keyword: str = "", search_field: str = "all", max_pages: int = 100, start_date=None, end_date=None):
         """
         공지사항 검색 (페이지네이션 지원)
 

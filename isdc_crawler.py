@@ -198,7 +198,7 @@ class ISDCCrawler:
             all_rows.extend(page_results[p])
         return all_rows
 
-    def search(self, keyword: str = "", max_pages: int = 1000) -> list[dict]:
+    def search(self, keyword: str = "", max_pages: int = 1000, start_date=None, end_date=None) -> list[dict]:
         """통합검색 전체 게시판 조회
 
         Args:

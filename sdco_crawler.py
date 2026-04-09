@@ -120,7 +120,7 @@ class SDCOCrawler:
             return []
         return self._parse_rows(soup, page)
 
-    def search(self, keyword: str = "", max_pages: int = 10) -> list[dict]:
+    def search(self, keyword: str = "", max_pages: int = 10, start_date=None, end_date=None) -> list[dict]:
         """
         Search 고시/공고 board by title keyword.
 

@@ -102,7 +102,7 @@ class ISDCNoticeCrawler:
 
         return results
 
-    def search(self, keyword: str = "", max_pages: int = 1000) -> list[dict]:
+    def search(self, keyword: str = "", max_pages: int = 1000, start_date=None, end_date=None) -> list[dict]:
         """고시공고 검색
 
         Args:

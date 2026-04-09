@@ -203,7 +203,7 @@ class JNDCCrawler:
             return []
         return self._parse_board_items(html)
 
-    def search(self, keyword: str = "", max_pages: int = 10) -> list[dict]:
+    def search(self, keyword: str = "", max_pages: int = 10, start_date=None, end_date=None) -> list[dict]:
         """Search the 게시판 (board) section of the unified search.
 
         Searches by title only (제목) when a keyword is provided.

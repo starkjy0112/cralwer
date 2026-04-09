@@ -80,7 +80,7 @@ class GMDCCrawler:
 
         return results
 
-    def search(self, keyword: str = "", search_field: str = "wr_subject", max_pages: int = 100):
+    def search(self, keyword: str = "", search_field: str = "wr_subject", max_pages: int = 100, start_date=None, end_date=None):
         """
         입찰공고 검색 (페이지네이션 지원)
 

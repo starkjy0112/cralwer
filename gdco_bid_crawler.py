@@ -75,7 +75,7 @@ class GDCOBidCrawler:
 
         return results
 
-    def search(self, keyword: str = "", search_field: str = "all", max_pages: int = 300):
+    def search(self, keyword: str = "", search_field: str = "all", max_pages: int = 300, start_date=None, end_date=None):
         """
         입찰공고 검색 (페이지네이션 지원)
 

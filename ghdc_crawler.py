@@ -156,7 +156,7 @@ class GhdcCrawler:
                 except Exception:
                     pass
 
-    def search(self, keyword: str = "", max_pages: int = 10) -> list[dict]:
+    def search(self, keyword: str = "", max_pages: int = 10, start_date=None, end_date=None) -> list[dict]:
         """통합검색으로 게시글 검색
 
         Args:

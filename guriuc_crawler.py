@@ -15,6 +15,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 BASE_URL = "https://www.guriuc.or.kr"
 LIST_URL = f"{BASE_URL}/bbsArticle/list.do"
+PAGE_SIZE = 10
 
 
 class GURIUCCrawler:
