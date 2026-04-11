@@ -405,10 +405,9 @@ class AsyncCrawlerWrapper:
     def __init__(self, crawler_class):
         self.crawler_class = crawler_class
 
-    def search(self, keyword="", max_pages=10):
+    def search(self, keyword="", max_pages=10, start_date=None, end_date=None):
         crawler = self.crawler_class()
-        # AlioCrawler.search()는 이미 동기 래퍼이므로 직접 호출
-        return crawler.search(keyword, max_pages=max_pages)
+        return crawler.search(keyword, max_pages=max_pages, start_date=start_date, end_date=end_date)
 
 
 # 크롤러 인스턴스
