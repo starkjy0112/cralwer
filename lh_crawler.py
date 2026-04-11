@@ -79,6 +79,11 @@ class LHCrawler:
                 parts = period.split("~")
                 date_start = parts[0].strip().split(",")[0].strip() if parts[0] else ""
                 date_end = parts[1].strip().split(",")[0].strip() if len(parts) > 1 else ""
+                # 2자리 연도 → 4자리 (26.04.10 → 2026-04-10)
+                if date_start and len(date_start.split(".")[0]) == 2:
+                    date_start = "20" + date_start.replace(".", "-")
+                if date_end and len(date_end.split(".")[0]) == 2:
+                    date_end = "20" + date_end.replace(".", "-")
 
             # 상세 링크 (JavaScript에서 idx로 POST 폼 전송)
             detail_link = "https://partner.lh.or.kr/deliberate/deliberate.asp"
