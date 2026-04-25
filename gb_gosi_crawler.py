@@ -84,6 +84,9 @@ class GBGosiCrawler:
 
             number = num_cell.get_text(strip=True) if num_cell else ""
             date = date_cell.get_text(strip=True) if date_cell else ""
+            # 2자리 연도 → 4자리 (26-04-24 → 2026-04-24)
+            if date and len(date) >= 8 and date[2] == "-":
+                date = "20" + date
             author = author_cell.get_text(strip=True) if author_cell else "경상북도청"
 
             link = subj_cell.select_one("a")
