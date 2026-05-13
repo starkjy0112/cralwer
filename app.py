@@ -424,12 +424,14 @@ CRAWLERS = {
         "instance": AsyncCrawlerWrapper(AlioCrawler),
         "url": "https://www.alio.go.kr"
     },
-    "alio_item": {
-        "name": "알리오",
-        "type": "물자구매",
-        "instance": AsyncCrawlerWrapper(AlioItemCrawler),
-        "url": "https://www.alio.go.kr"
-    },
+    # alio_item 비활성화: alio (bidList.do)와 99.95% 중복 데이터.
+    # 미래에 reportFormRootNo를 다른 카테고리(수의계약 등)로 변경 시 재활성화.
+    # "alio_item": {
+    #     "name": "알리오",
+    #     "type": "물자구매",
+    #     "instance": AsyncCrawlerWrapper(AlioItemCrawler),
+    #     "url": "https://www.alio.go.kr"
+    # },
     "lh": {
         "name": "LH 파트너몰",
         "type": "자재공법심의",
@@ -2708,106 +2710,60 @@ def lh_detail_redirect(idx):
 
 @app.route("/api/search_all")
 def search_all():
-    """모든 크롤러 통합 검색"""
+    """DB에서 통합 검색 (SQLite 기반)"""
+    import db
+
     keyword = request.args.get("keyword", "")
-    max_pages = int(request.args.get("max_pages", 1000))
     start_date = request.args.get("start_date", "")
     end_date = request.args.get("end_date", "")
-
-    crawler_ids_param = request.args.get("crawler_ids", "")  # 콤마 구분
+    crawler_ids_param = request.args.get("crawler_ids", "")
 
     if not keyword:
         return jsonify({"error": "검색어를 입력해주세요"}), 400
 
-    # 선택된 크롤러만 검색 (없으면 전체)
-    if crawler_ids_param:
-        selected_ids = set(crawler_ids_param.split(","))
-        target_crawlers = {k: v for k, v in CRAWLERS.items() if k in selected_ids}
-    else:
-        target_crawlers = CRAWLERS
+    crawler_ids = crawler_ids_param.split(",") if crawler_ids_param else None
 
-    DATE_SUPPORTED = (
-        "nara", "sh_bid",
-        "busan_gosi", "busan_notice", "daejeon_gosi", "gangwon",
-        "chungnam", "gb_notice", "gb_gosi",
-        "gwangju", "incheon", "seoul_cis",
-        "paju",
+    # DB 검색 (밀리초 단위)
+    rows = db.search(
+        keyword=keyword,
+        start_date=start_date or None,
+        end_date=end_date or None,
+        crawler_ids=crawler_ids,
+        limit=10000,
     )
 
+    # 크롤러별로 결과 그룹화 (기존 응답 형식 호환)
     results = {}
-    errors = {}
+    for row in rows:
+        cid = row["crawler_id"]
+        if cid not in results:
+            results[cid] = []
+        results[cid].append({
+            "title": row["title"],
+            "date": row["date"],
+            "url": row["url"],
+            "organization": row["organization"],
+            "number": row["number"],
+            "deadline": row["deadline"],
+        })
 
-    def search_crawler(crawler_id, info):
-        """개별 크롤러 검색 (스레드용)"""
-        try:
-            crawler = info["instance"]
-            if crawler_id in DATE_SUPPORTED and start_date and end_date:
-                data = crawler.search(keyword, max_pages=max_pages,
-                                      start_date=start_date, end_date=end_date)
-            else:
-                data = crawler.search(keyword, max_pages=max_pages)
-
-            # 날짜 지원 안 하는 크롤러는 결과에서 날짜 필터링
-            if crawler_id not in DATE_SUPPORTED and start_date and end_date:
-                filtered = []
-                for item in data:
-                    date = item.get("date", "")
-                    if not date:
-                        continue  # 날짜 없으면 제외
-                    normalized = date.replace(".", "-").replace("/", "-")[:10]
-                    if start_date <= normalized <= end_date:
-                        filtered.append(item)
-                data = filtered
-
-            return crawler_id, data, None
-        except Exception as e:
-            return crawler_id, [], str(e)
-
-    # 멀티스레드로 병렬 검색
-    import concurrent.futures
-    worker_count = min(60, len(target_crawlers))
-    with concurrent.futures.ThreadPoolExecutor(max_workers=worker_count) as executor:
-        futures = {
-            executor.submit(search_crawler, cid, info): cid
-            for cid, info in target_crawlers.items()
+    summary = {}
+    for cid, items in results.items():
+        crawler = CRAWLERS.get(cid, {})
+        summary[cid] = {
+            "name": f"{crawler.get('name', cid)} ({crawler.get('type', '')})",
+            "count": len(items),
+            "error": None,
         }
-
-        for future in concurrent.futures.as_completed(futures, timeout=90):
-            try:
-                crawler_id, data, error = future.result(timeout=30)
-                if error:
-                    errors[crawler_id] = error
-                    results[crawler_id] = []
-                else:
-                    results[crawler_id] = data
-            except Exception as e:
-                cid = futures[future]
-                errors[cid] = f"timeout: {str(e)[:50]}"
-                results[cid] = []
-
-    # 제목에 키워드가 포함된 결과만 필터 (검색 미지원 크롤러 대응)
-    filtered_results = {}
-    for crawler_id, data in results.items():
-        filtered = [item for item in data if keyword in (item.get("title") or "")]
-        filtered_results[crawler_id] = filtered
-
-    # 결과 집계
-    total_count = sum(len(v) for v in filtered_results.values())
 
     return jsonify({
         "success": True,
         "keyword": keyword,
-        "results": filtered_results,
-        "summary": {
-            crawler_id: {
-                "name": f"{CRAWLERS[crawler_id]['name']} ({CRAWLERS[crawler_id]['type']})",
-                "count": len(data),
-                "error": errors.get(crawler_id)
-            }
-            for crawler_id, data in filtered_results.items()
-        },
-        "total_count": total_count,
-        "errors": errors
+        "results": results,
+        "summary": summary,
+        "total_count": len(rows),
+        "errors": {},
+        "from_db": True,  # DB에서 가져온 결과임을 표시
     })
 
 
@@ -2864,8 +2820,87 @@ def prefetch_slow_crawlers():
     threading.Thread(target=_prefetch, daemon=True).start()
 
 
+def setup_scheduler():
+    """APScheduler 설정:
+    - 1시간마다 전체 크롤러 수집
+    - 30분마다 알리오 입찰만 추가 수집 (시간 차이로 인한 누락 방지)
+    """
+    from apscheduler.schedulers.background import BackgroundScheduler
+    from apscheduler.triggers.interval import IntervalTrigger
+    import db, collector
+
+    db.init_db()
+
+    def scheduled_collect_all():
+        try:
+            print(f"[Scheduler] 전체 자동 수집 시작...")
+            result = collector.collect_all(CRAWLERS, days=30, max_workers=10, verbose=False)
+            print(f"[Scheduler] 완료: 성공 {result['success']}, 에러 {result['error']}, 신규 {result['new']}건")
+        except Exception as e:
+            print(f"[Scheduler] 에러: {e}")
+
+    def scheduled_collect_alio():
+        """알리오 입찰만 30분 주기로 수집 (변동 빈도 높음)"""
+        try:
+            if "alio" not in CRAWLERS:
+                return
+            print(f"[Scheduler] 알리오 추가 수집 시작...")
+            cid, name, count, new, err = collector.collect_one("alio", CRAWLERS["alio"], days=30)
+            print(f"[Scheduler] 알리오 완료: 수집 {count}건, 신규 {new}건" + (f", 에러: {err[:50]}" if err else ""))
+        except Exception as e:
+            print(f"[Scheduler] 알리오 에러: {e}")
+
+    scheduler = BackgroundScheduler(daemon=True)
+
+    # 전체 1시간 주기
+    scheduler.add_job(
+        scheduled_collect_all,
+        trigger=IntervalTrigger(hours=1),
+        id="auto_collect_all",
+        name="전체 크롤러 자동 수집",
+        max_instances=1,
+        coalesce=True,
+    )
+
+    # 알리오만 30분 주기 (전체 수집과 겹치지 않도록 minute=30 시작)
+    scheduler.add_job(
+        scheduled_collect_alio,
+        trigger=IntervalTrigger(minutes=30),
+        id="auto_collect_alio",
+        name="알리오 입찰 추가 수집",
+        max_instances=1,
+        coalesce=True,
+    )
+
+    scheduler.start()
+    print("[Scheduler] 등록: 전체 1시간 + 알리오 30분 주기")
+    return scheduler
+
+
+@app.route("/api/db_stats")
+def api_db_stats():
+    """DB 통계 조회"""
+    import db
+    return jsonify(db.get_stats())
+
+
+@app.route("/api/manual_collect", methods=["POST"])
+def api_manual_collect():
+    """수동 수집 트리거"""
+    import collector, threading
+    days = int(request.args.get("days", 30))
+
+    def run():
+        collector.collect_all(CRAWLERS, days=days, max_workers=10, verbose=False)
+
+    threading.Thread(target=run, daemon=True).start()
+    return jsonify({"started": True, "days": days})
+
+
 if __name__ == "__main__":
+    import db
+    db.init_db()
     warmup_cookies()
-    # prefetch_slow_crawlers()  # 개발 시 비활성화 (CPU 부하)
+    setup_scheduler()
     app.run(debug=False, host="0.0.0.0", port=int(os.environ.get("PORT", 5001)),
-            threaded=True)
+            threaded=True, use_reloader=False)

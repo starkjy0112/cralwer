@@ -5,6 +5,7 @@ __pycache__/
 .venv/
 venv/
 *.xlsx
+*.csv
 북마크.html
 ~$*
 downloads/
@@ -13,3 +14,10 @@ Baccarat/
 *.jsonl
 .DS_Store
 baccarat_live.py
+
+# SQLite DB (자동 수집 데이터)
+crawlers.db
+crawlers.db-journal
+crawlers.db-wal
+crawlers.db-shm
+*.log
