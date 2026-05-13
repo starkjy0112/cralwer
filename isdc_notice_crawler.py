@@ -122,7 +122,7 @@ class ISDCNoticeCrawler:
         if total_pages > 1:
             with ThreadPoolExecutor(max_workers=self.WORKERS) as executor:
                 futures = {}
-                for p in range(2, total_pages + 1, start_date=None, end_date=None):
+                for p in range(2, total_pages + 1):
                     futures[executor.submit(self._fetch_page, keyword, p)] = p
                 for future in as_completed(futures):
                     p = futures[future]

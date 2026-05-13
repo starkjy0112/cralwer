@@ -144,7 +144,7 @@ class SHCrawler:
         if total_pages > 1:
             with ThreadPoolExecutor(max_workers=self.WORKERS) as executor:
                 futures = {
-                    executor.submit(self._fetch_and_parse, p, keyword, start_date=None, end_date=None): p
+                    executor.submit(self._fetch_and_parse, p, keyword): p
                     for p in range(2, total_pages + 1)
                 }
                 for future in as_completed(futures):

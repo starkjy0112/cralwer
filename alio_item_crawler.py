@@ -134,9 +134,11 @@ class AlioItemCrawler:
             disclosure_no = item.get("disclosureNo", "")
             results.append({
                 "apba_id": apba_id,
+                "organization": item.get("instNm", "") or apba_id,
                 "title": item.get("title", ""),
                 "date": item.get("idate", ""),
                 "disclosure_no": disclosure_no,
+                "number": disclosure_no,
                 "bid_type": item.get("bidType", ""),
                 "url": f"https://www.alio.go.kr/item/itemReport.do?seq={disclosure_no}&disclosureNo={disclosure_no}" if disclosure_no else "",
             })

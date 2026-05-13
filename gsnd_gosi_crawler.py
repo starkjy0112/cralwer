@@ -35,8 +35,11 @@ class GSNDGosiCrawler:
         adapter = HTTPAdapter(pool_connections=1, pool_maxsize=20)
         self.session.mount("https://", adapter)
         self.session.mount("http://", adapter)
-        # 초기 접속으로 세션/쿠키 확보
-        self.session.get(f"{LIST_URL}?menuCd={MENU_CD}", timeout=15)
+        # 초기 접속으로 세션/쿠키 확보 (실패해도 무시 - 사이트 다운 시 서버 시작 보호)
+        try:
+            self.session.get(f"{LIST_URL}?menuCd={MENU_CD}", timeout=15)
+        except Exception:
+            pass
 
     def _fetch_page(self, keyword, page):
         params = {

@@ -23,11 +23,11 @@ COOKIE_TTL = 3600  # 1시간
 class AlioCrawler:
     """알리오 입찰공고 크롤러"""
 
-    def __init__(self, concurrency: int = 100):
+    def __init__(self, concurrency: int = 10):
         self.base_url = "https://www.alio.go.kr"
         self.api_url = f"{self.base_url}/occasional/findBidList.json"
         self.cookies = None
-        self.concurrency = concurrency  # 동시 요청 수
+        self.concurrency = concurrency  # 동시 요청 수 (서버 부하 방지)
 
     async def _get_cookies(self):
         """쿠키 획득 (캐시 우선, requests 시도, Playwright 폴백)"""
@@ -68,8 +68,8 @@ class AlioCrawler:
         _cookie_cache["expires"] = time.time() + COOKIE_TTL
         return self.cookies
 
-    async def _call_api_async(self, session: aiohttp.ClientSession, keyword: str, page_no: int):
-        """API 비동기 호출"""
+    async def _call_api_async(self, session: aiohttp.ClientSession, keyword: str, page_no: int, retries: int = 2):
+        """API 비동기 호출 (재시도 포함)"""
         headers = {
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
             "Cookie": self.cookies,
@@ -84,19 +84,29 @@ class AlioCrawler:
             "area": ""
         }
 
-        try:
-            async with session.get(self.api_url, params=params, headers=headers, timeout=aiohttp.ClientTimeout(total=60)) as res:
-                data = await res.json()
-                return page_no, data
-        except Exception as e:
-            print(f"[오류] 페이지 {page_no}: {e}")
-            return page_no, None
+        last_err = None
+        for attempt in range(retries + 1):
+            try:
+                async with session.get(self.api_url, params=params, headers=headers, timeout=aiohttp.ClientTimeout(total=30)) as res:
+                    data = await res.json()
+                    return page_no, data
+            except Exception as e:
+                last_err = e
+                if attempt < retries:
+                    await asyncio.sleep(0.5 * (attempt + 1))
+                    continue
+        return page_no, None
 
     async def _search_async(self, keyword: str = "", max_pages: int = 1, start_date=None, end_date=None):
-        """비동기 검색"""
-        # 쿠키 없으면 획득 (캐시 우선 확인)
+        """비동기 검색 (배치 + early stop)"""
+        # 날짜 기본값
+        if not start_date:
+            start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+        if not end_date:
+            end_date = datetime.now().strftime("%Y-%m-%d")
+
+        # 쿠키 없으면 획득
         if not self.cookies:
-            # 캐시에 있으면 바로 사용
             if _cookie_cache["cookies"] and time.time() < _cookie_cache["expires"]:
                 self.cookies = _cookie_cache["cookies"]
             else:
@@ -104,11 +114,28 @@ class AlioCrawler:
                 await self._get_cookies()
 
         results = []
-        semaphore = asyncio.Semaphore(self.concurrency)
 
-        async def fetch_with_semaphore(session, page_no):
-            async with semaphore:
-                return await self._call_api_async(session, keyword, page_no)
+        def parse_items(items):
+            parsed = []
+            for item in items:
+                seq = item.get("seq", "")
+                parsed.append({
+                    "title": item.get("rtitle", ""),
+                    "organization": item.get("pname", ""),
+                    "deadline": item.get("bidInfoEndDt", ""),
+                    "date": item.get("bdate", ""),
+                    "seq": seq,
+                    "url": f"https://www.alio.go.kr/occasional/bidDtl.do?seq={seq}" if seq else "",
+                })
+            return parsed
+
+        def in_range(item):
+            d = (item.get("date") or "").replace(".", "-").replace("/", "-")[:10]
+            return d and start_date <= d <= end_date
+
+        def is_too_old(item):
+            d = (item.get("date") or "").replace(".", "-").replace("/", "-")[:10]
+            return d and d < start_date
 
         async with aiohttp.ClientSession() as session:
             # 첫 페이지로 총 페이지 수 확인
@@ -117,72 +144,74 @@ class AlioCrawler:
                 print("[오류] 첫 페이지 조회 실패")
                 return results
 
-            # 총 페이지 수 확인
             page_info = first_data.get("data", {}).get("page", {})
             total_count = page_info.get("totalCount", 0)
             total_pages = page_info.get("totalPage", 1)
             actual_pages = min(max_pages, total_pages)
 
-            print(f"[2] 총 {total_count}건, {actual_pages}페이지 병렬 조회 중...")
+            print(f"[2] 총 {total_count}건, 최대 {actual_pages}페이지 (배치 조회 + early stop)")
 
-            # 첫 페이지 결과 추가
-            items = first_data.get("data", {}).get("result", [])
-            for item in items:
-                seq = item.get("seq", "")
-                results.append({
-                    "title": item.get("rtitle", ""),
-                    "organization": item.get("pname", ""),
-                    "deadline": item.get("bidInfoEndDt", ""),
-                    "date": item.get("bdate", ""),
-                    "seq": seq,
-                    "url": f"https://www.alio.go.kr/occasional/bidDtl.do?seq={seq}" if seq else "",
-                })
+            # 첫 페이지 결과
+            first_items = parse_items(first_data.get("data", {}).get("result", []))
+            for item in first_items:
+                if in_range(item):
+                    results.append(item)
 
-            # 나머지 페이지 병렬 조회
-            if actual_pages > 1:
-                tasks = [fetch_with_semaphore(session, page_no) for page_no in range(2, actual_pages + 1)]
+            # 첫 페이지에 이미 start_date보다 오래된 게 있으면 거기서 중단
+            if any(is_too_old(item) for item in first_items):
+                print(f"[완료] {len(results)}건 (early stop at page 1)")
+                return results
+
+            # 배치 단위로 받아가며 early stop 검사
+            BATCH_SIZE = self.concurrency * 2  # 한 번에 20페이지씩 (concurrency=10)
+            page = 2
+            stop = False
+            failed_pages = []
+
+            while page <= actual_pages and not stop:
+                batch_end = min(page + BATCH_SIZE, actual_pages + 1)
+                tasks = [self._call_api_async(session, keyword, p) for p in range(page, batch_end)]
                 responses = await asyncio.gather(*tasks)
-            else:
-                responses = []
+                responses.sort(key=lambda x: x[0])
 
-        # 페이지 순서대로 정렬
-        responses.sort(key=lambda x: x[0])
+                for page_no, data in responses:
+                    if data is None or data.get("status") != "success":
+                        failed_pages.append(page_no)
+                        continue
+                    items_raw = data.get("data", {}).get("result", [])
+                    parsed = parse_items(items_raw)
 
-        for page_no, data in responses:
-            if data is None:
-                continue
+                    page_has_too_old = False
+                    for item in parsed:
+                        if is_too_old(item):
+                            page_has_too_old = True
+                            stop = True
+                        if in_range(item):
+                            results.append(item)
+                    # 같은 페이지 안에서 너무 오래된 게 나왔어도, 그 페이지의 in_range는 다 처리됨
 
-            if data.get("status") != "success":
-                print(f"[오류] 페이지 {page_no}: {data.get('message', '알 수 없는 오류')}")
-                continue
+                page = batch_end
 
-            items = data.get("data", {}).get("result", [])
+            # 실패한 페이지 재시도 (한 번 더)
+            if failed_pages:
+                # stop 이후 페이지는 재시도 안 함 (이미 범위 밖)
+                # stop 시점 이전의 실패한 페이지만 재시도
+                retry_pages = [p for p in failed_pages if p <= page]
+                print(f"[재시도] 실패 페이지 {len(retry_pages)}개")
+                for batch_start in range(0, len(retry_pages), self.concurrency):
+                    batch = retry_pages[batch_start:batch_start + self.concurrency]
+                    tasks = [self._call_api_async(session, keyword, p) for p in batch]
+                    responses = await asyncio.gather(*tasks)
+                    for page_no, data in responses:
+                        if data is None or data.get("status") != "success":
+                            continue
+                        items_raw = data.get("data", {}).get("result", [])
+                        parsed = parse_items(items_raw)
+                        for item in parsed:
+                            if in_range(item):
+                                results.append(item)
 
-            if not items:
-                continue
-
-            for item in items:
-                seq = item.get("seq", "")
-                results.append({
-                    "title": item.get("rtitle", ""),
-                    "organization": item.get("pname", ""),
-                    "deadline": item.get("bidInfoEndDt", ""),
-                    "date": item.get("bdate", ""),
-                    "seq": seq,
-                    "url": f"https://www.alio.go.kr/occasional/bidDtl.do?seq={seq}" if seq else "",
-                })
-
-        print(f"[완료] 총 {len(results)}건")
-
-        # 날짜 필터 (기본: 최근 30일)
-        if not start_date:
-            start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
-        if not end_date:
-            end_date = datetime.now().strftime("%Y-%m-%d")
-        results = [_item for _item in results
-                     if (lambda d: d and start_date <= d <= end_date)(
-                         (_item.get("date") or "").replace(".", "-").replace("/", "-")[:10])]
-
+        print(f"[완료] {len(results)}건 (조회 페이지 ~{page-1})")
         return results
 
     def search(self, keyword: str = "", max_pages: int = 1, start_date=None, end_date=None):
