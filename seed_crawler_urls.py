@@ -7,8 +7,12 @@ import db
 from crawler_registry import VERIFIED_ROWS
 
 # URL 정보는 xlsx가 있으면 거기서, 없으면 하드코딩된 fallback URL 사용
+# URL 정책:
+# - 기본 URL = 실제 크롤러가 사용하는 URL (사용자가 클릭해서 확인 가능한 살아있는 URL)
+# - 폴백 URL = xlsx 원본 URL 또는 다른 대체 URL
+# 이렇게 하면 관리자 페이지에서 죽은 URL 대신 실제 작동하는 URL을 보게 됨.
 FALLBACK_URLS = {
-    # 13-43 검증 완료 크롤러의 URL (xlsx 파일 없어도 seed 가능)
+    # (게시판이름, 실제 크롤러 사용 URL)
     "alio_item":   ("공고", "https://alio.go.kr/item/itemOrganList.do?apbaId=C0107"),
     "nara":        ("입찰공고", "https://www.g2b.go.kr/"),
     "alio":        ("공고", "https://www.alio.go.kr/occasional/bidList.do?"),
@@ -18,16 +22,19 @@ FALLBACK_URLS = {
     "gtdc":        ("입찰공고", "https://gtdc.or.kr/pub/egbid.do"),
     "gdco":        ("입찰공고", "https://www.gdco.co.kr/customer/bidding_list.php?strBoardID=BID"),
     "gmdc":        ("입찰공고", "https://www.gmdc.co.kr/bbs/board.php?bo_table=sub04_02"),
-    "gndc":        ("공고", "https://www.gndc.co.kr/boardlist.do?seqId=0000000048"),
+    # gndc: xlsx URL seqId=48 죽음 → 실제 크롤러가 쓰는 seqId=6241 사용
+    "gndc":        ("공고", "https://www.gndc.co.kr/boardlist.do?seqId=0000006241"),
     "gbdc":        ("게시판 검색", "https://www.gbdc.co.kr/totalSearch.do?searchKeywordTotal=&pageIndex=1&tapIdx=2"),
     "ghdc":        ("통합검색", "https://ghdc.or.kr/sub.html?code=08_05"),
     "dudc":        ("공지사항", "https://www.dudc.or.kr/ko/page.do?mnu_uid=100"),
     "sdco":        ("고시/공고", "https://www.sdco.or.kr/board.es?mid=a10601020000&bid=0007"),
-    "sh":          ("통합검색", "https://www.i-sh.co.kr/search/total"),
+    # sh: xlsx URL /search/total 아닌 실제 크롤러 URL 사용
+    "sh":          ("공고 및 공지", "https://www.i-sh.co.kr/main/lay2/program/S1T294C295/www/brd/m_241/list.do"),
     "sh_bid":      ("입찰공고", "https://www.i-sh.co.kr/main/lay2/program/S1T316C7212/www/m_2428/BidblancList.do"),
     "isdc":        ("통합검색", "https://www.isdc.co.kr/guidance/search.asp"),
     "isdc_notice": ("고시공고", "https://www.isdc.co.kr/board/default/boardDefaultList.asp?HiddenBbsNo=82"),
-    "jndc":        ("통합검색", "https://www.jndc.co.kr/cf/search.do"),
+    # jndc: xlsx URL /cf/search.do 죽음 → 실제 크롤러가 쓰는 /web/main/searchResult 사용
+    "jndc":        ("통합검색", "https://www.jndc.co.kr/web/main/searchResult"),
     "jbdc":        ("통합검색", "https://www.jbdc.co.kr/search/board.do?searchWrd="),
     "jpdc":        ("검색서비스", "https://www.jpdc.co.kr/help/search.htm?q="),
     "cbdc":        ("공지사항", "https://www.cbdc.co.kr/zboard/list.do?lmCode=BBSMSTR_000000000018"),
@@ -42,10 +49,10 @@ FALLBACK_URLS = {
     "ncuc":        ("공유재산입찰", "https://www.ncuc.or.kr/main/35"),
 }
 
-# 폴백 URL (기존 URL 죽었을 때 대체)
+# 폴백 URL = xlsx 원본 URL (참고용, 죽은 URL도 여기에)
 FALLBACK_URL_MAP = {
-    "jndc": "https://www.jndc.co.kr/web/main/searchResult",
-    "gndc": "https://www.gndc.co.kr/boardlist.do?seqId=0000006241",
+    "jndc": "https://www.jndc.co.kr/cf/search.do",       # xlsx 원본 (죽음)
+    "gndc": "https://www.gndc.co.kr/boardlist.do?seqId=0000000048",  # xlsx 원본 (죽음)
 }
 
 
