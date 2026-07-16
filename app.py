@@ -3050,9 +3050,24 @@ def health_check():
     try:
         with db.get_conn() as conn:
             conn.cursor().execute("SELECT 1").fetchone()
-        return {"status": "ok", "db": "connected"}, 200
+        return {"status": "ok", "db": "connected", "version": "a02d7a7"}, 200
     except Exception as e:
         return {"status": "error", "error": str(e)[:200]}, 503
+
+
+@app.route("/api/admin/seed", methods=["POST"])
+@require_admin_token
+def api_admin_seed():
+    """crawler_urls seed 수동 트리거. 재배포마다 DB 초기화되는 무료플랜용."""
+    try:
+        import seed_crawler_urls
+        seed_crawler_urls.seed()
+        import db
+        urls = db.get_crawler_urls()
+        return jsonify({"ok": True, "urls_count": len(urls)})
+    except Exception as e:
+        import traceback
+        return jsonify({"ok": False, "error": str(e)[:200], "trace": traceback.format_exc()[:500]}), 500
 
 
 @app.route("/api/manual_collect", methods=["POST"])
