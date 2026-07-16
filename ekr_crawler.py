@@ -28,8 +28,7 @@ class EkrCrawler:
     BOARD_PARAMS = {
         "boardUid": "402880317cc0644a017cc5e8000f06b7",
         "contentUid": "402880317cc0644a017cc0c9da9f0120",
-        "categoryUid2": "8a8bb3529665d71401996fb31ede7592",
-        "categoryUid3": "8a8bb3529665d7140199700049800553",
+        # 카테고리 필터 제거 - 전체 카테고리(기타/보상계획/수행기관/공모 안내/모집공고) 수집
     }
 
     def __init__(self):
@@ -47,7 +46,8 @@ class EkrCrawler:
         )
         self.session.verify = False
 
-    WORKERS = 20
+    WORKERS = 5
+    MAX_RETRIES = 3
 
     def search(self, keyword="", max_pages=10, start_date=None, end_date=None):
         """
@@ -67,19 +67,24 @@ class EkrCrawler:
             raw_items = first_items
         else:
             page_results = {1: first_items}
-            with ThreadPoolExecutor(max_workers=self.WORKERS) as executor:
-                futures = {
-                    executor.submit(self._fetch_page, keyword, p): p
-                    for p in range(2, actual_pages + 1)
-                }
-                for future in as_completed(futures):
-                    p = futures[future]
-                    try:
-                        items, _ = future.result()
-                        if items:
+            pending = set(range(2, actual_pages + 1))
+            for attempt in range(self.MAX_RETRIES):
+                if not pending:
+                    break
+                failed_this_round = set()
+                with ThreadPoolExecutor(max_workers=self.WORKERS) as executor:
+                    futures = {
+                        executor.submit(self._fetch_page, keyword, p): p
+                        for p in pending
+                    }
+                    for future in as_completed(futures):
+                        p = futures[future]
+                        try:
+                            items, _ = future.result()
                             page_results[p] = items
-                    except Exception:
-                        pass
+                        except Exception:
+                            failed_this_round.add(p)
+                pending = failed_this_round
 
             raw_items = []
             for p in sorted(page_results.keys()):

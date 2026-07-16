@@ -425,6 +425,7 @@
     <header class="top-header">
         <div class="nav-links">
             <a href="/"><i class="bi bi-grid"></i> 개별 검색</a>
+            <a href="/admin" style="color:#ffb3b3;"><i class="bi bi-gear-fill"></i> 관리자</a>
         </div>
         <h1><i class="bi bi-search"></i> 통합 검색</h1>
         <p>{{ crawlers|length }}개 크롤러에서 한번에 검색합니다</p>
@@ -448,23 +449,51 @@
 
         <!-- 지역 그룹 선택 -->
         <div style="margin-top: 14px;">
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
                 <span style="font-size: 0.82rem; color: #6c757d; white-space: nowrap;"><i class="bi bi-geo-alt"></i> 검색 지역:</span>
                 <button onclick="toggleAllGroups(true)" style="padding: 3px 10px; border: 1px solid #dee2e6; background: white; border-radius: 5px; font-size: 0.72rem; cursor: pointer;">전체 선택</button>
                 <button onclick="toggleAllGroups(false)" style="padding: 3px 10px; border: 1px solid #dee2e6; background: white; border-radius: 5px; font-size: 0.72rem; cursor: pointer;">전체 해제</button>
+                <label style="font-size: 0.72rem; color:#6c757d; display:flex; align-items:center; gap:4px; margin-left:auto;">
+                    <input type="checkbox" id="showAllRegions" onchange="renderRegionCheckboxes()">
+                    <span title="crawler_urls DB에 등록된 검증 완료 크롤러만 (기본)">전체 지역 보기 (미검증 포함)</span>
+                </label>
             </div>
             <div id="regionCheckboxes" style="display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;">
-                {% for group, cids in crawler_groups.items() %}
-                <label style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border: 1.5px solid #dee2e6; border-radius: 8px; font-size: 0.78rem; cursor: pointer; transition: all 0.15s; background: white;"
-                       onmouseover="this.style.borderColor='#4361ee'" onmouseout="this.style.borderColor=this.querySelector('input').checked?'#4361ee':'#dee2e6'">
-                    <input type="checkbox" class="region-check" value="{{ group }}" checked
-                           onchange="updateRegionStyle(this)" style="accent-color: #4361ee;">
-                    <span>{{ group }}</span>
-                    <span style="color: #adb5bd; font-size: 0.68rem;">({{ cids|length }})</span>
-                </label>
-                {% endfor %}
+                <!-- JavaScript로 렌더링 -->
             </div>
         </div>
+
+        <script>
+        // 검증된 크롤러 ID (Jinja에서 주입)
+        const VERIFIED_IDS = new Set({{ verified_ids|tojson if verified_ids else '[]' }});
+        const CRAWLER_GROUPS_DATA = {
+            {% for group, cids in crawler_groups.items() %}
+            '{{ group }}': [{% for cid in cids %}'{{ cid }}',{% endfor %}],
+            {% endfor %}
+        };
+
+        function renderRegionCheckboxes() {
+            const showAll = document.getElementById('showAllRegions')?.checked;
+            const container = document.getElementById('regionCheckboxes');
+            let html = '';
+            for (const [group, cids] of Object.entries(CRAWLER_GROUPS_DATA)) {
+                // 검증된 크롤러만 카운트 (기본) 또는 전체
+                const filteredIds = showAll ? cids : cids.filter(c => VERIFIED_IDS.has(c));
+                if (filteredIds.length === 0) continue;  // 검증된 크롤러 없는 그룹은 숨김
+                html += `
+                    <label style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border: 1.5px solid #dee2e6; border-radius: 8px; font-size: 0.78rem; cursor: pointer; background: white;"
+                           onmouseover="this.style.borderColor='#4361ee'" onmouseout="this.style.borderColor=this.querySelector('input').checked?'#4361ee':'#dee2e6'">
+                        <input type="checkbox" class="region-check" value="${group}" checked
+                               onchange="updateRegionStyle(this)" style="accent-color: #4361ee;">
+                        <span>${group}</span>
+                        <span style="color: #adb5bd; font-size: 0.68rem;" title="${showAll?'전체':'검증완료'} 크롤러">(${filteredIds.length})</span>
+                    </label>
+                `;
+            }
+            container.innerHTML = html || '<span style="color:#adb5bd; font-size:0.85rem;">검증된 크롤러 없음. "전체 지역 보기" 체크 필요.</span>';
+        }
+        document.addEventListener('DOMContentLoaded', renderRegionCheckboxes);
+        </script>
 
         <!-- 날짜 필터 -->
         <div class="date-filter">
@@ -480,12 +509,18 @@
             </div>
         </div>
 
-        <!-- 결과 내 재검색 -->
+        <!-- 결과 내 재검색 - 여러 키워드 콤마 + OR/AND -->
         <div class="sub-search-wrap" id="subSearchWrap">
             <span style="font-size: 0.82rem; color: #6c757d;"><i class="bi bi-funnel"></i> 결과 내 검색:</span>
-            <input type="text" id="subSearchKeyword" placeholder="결과 내에서 추가 검색..."
-                style="padding: 5px 10px; border: 1px solid #dee2e6; border-radius: 6px; font-size: 0.82rem; width: 200px;"
-                oninput="applySubSearch()">
+            <input type="text" id="subSearchKeyword" placeholder="여러 키워드 쉼표 구분 (예: 공사, 용역, 특허)"
+                style="padding: 5px 10px; border: 1px solid #dee2e6; border-radius: 6px; font-size: 0.82rem; width: 320px;"
+                oninput="applySubSearch()"
+                title="쉼표(,)로 여러 키워드 입력 가능. 모드에 따라 OR(하나라도)/AND(전부) 매칭">
+            <select id="subSearchMode" onchange="applySubSearch()"
+                style="padding: 5px 8px; border: 1px solid #dee2e6; border-radius: 6px; font-size: 0.78rem;">
+                <option value="or">OR (하나라도)</option>
+                <option value="and">AND (전부)</option>
+            </select>
             <button onclick="clearSubSearch()" class="btn btn-sm btn-outline-secondary" style="font-size: 0.75rem;">초기화</button>
         </div>
     </div>
@@ -553,7 +588,7 @@
                             <th style="width: 50px;">번호</th>
                             <th>제목</th>
                             <th style="width: 130px;">출처</th>
-                            <th style="width: 100px;">날짜</th>
+                            <th style="width: 160px; white-space: nowrap;">날짜</th>
                         </tr>
                     </thead>
                     <tbody id="tableBody"></tbody>
@@ -613,28 +648,28 @@
             {% endfor %}
         };
 
-        // ── 빠른 검색어 ──
-        const DEFAULT_QUICK_SEARCHES = [
-            '기본설계', '실시설계', '기술제안', '제안서', '신기술', '공법',
-            '특허', '발파', '미진동', '무진동', '절토', '토공', '토목',
-            '부지조성', '산업단지', '조성공사', '개발사업'
-        ];
+        // ── 빠른 검색어 - DB(/api/keywords) 기반 ──
+        let _cachedKW = null;
+        let _cachedKWAt = 0;
 
-        function getQuickSearches() {
-            const saved = localStorage.getItem('quickSearches');
-            return saved ? JSON.parse(saved) : DEFAULT_QUICK_SEARCHES;
+        async function fetchKeywordsFromDB() {
+            const now = Date.now();
+            if (_cachedKW && (now - _cachedKWAt) < 5 * 60 * 1000) return _cachedKW;
+            try {
+                _cachedKW = await fetch('/api/keywords').then(r => r.json());
+                _cachedKWAt = now;
+                return _cachedKW;
+            } catch (e) {
+                return [];
+            }
         }
 
-        function saveQuickSearches(list) {
-            localStorage.setItem('quickSearches', JSON.stringify(list));
-        }
-
-        function renderQuickSearchTags() {
-            const tags = getQuickSearches();
-            document.getElementById('quickSearchTags').innerHTML = tags.map((kw, idx) =>
-                `<span class="quick-tag" onclick="quickSearch('${kw}')">
-                    ${kw}
-                    <i class="bi bi-x remove" onclick="event.stopPropagation(); removeQuickSearch(${idx})"></i>
+        async function renderQuickSearchTags() {
+            const list = await fetchKeywordsFromDB();
+            document.getElementById('quickSearchTags').innerHTML = list.map(k =>
+                `<span class="quick-tag ${k.is_default?'default-tag':'custom-tag'}" onclick="quickSearch('${k.keyword}')" title="${k.is_default?'xlsx 기본':'사용자 추가'}">
+                    ${k.keyword}
+                    ${k.is_default?'':`<i class="bi bi-x remove" onclick="event.stopPropagation(); removeQuickSearch(${k.id})"></i>`}
                 </span>`
             ).join('');
         }
@@ -644,23 +679,31 @@
             performSearch();
         }
 
-        function addQuickSearch() {
+        async function addQuickSearch() {
             const kw = prompt('추가할 검색어를 입력하세요:');
-            if (kw && kw.trim()) {
-                const list = getQuickSearches();
-                if (!list.includes(kw.trim())) {
-                    list.push(kw.trim());
-                    saveQuickSearches(list);
-                    renderQuickSearchTags();
-                }
+            if (!kw || !kw.trim()) return;
+            const r = await fetch('/api/keywords', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({keyword: kw.trim()})
+            }).then(r => r.json());
+            if (r.ok) {
+                _cachedKWAt = 0;
+                renderQuickSearchTags();
+            } else {
+                alert('추가 실패: ' + (r.error || '이미 존재하는 검색어'));
             }
         }
 
-        function removeQuickSearch(idx) {
-            const list = getQuickSearches();
-            list.splice(idx, 1);
-            saveQuickSearches(list);
-            renderQuickSearchTags();
+        async function removeQuickSearch(kwId) {
+            if (!confirm('삭제하시겠습니까?')) return;
+            const r = await fetch(`/api/keywords/${kwId}`, {method: 'DELETE'}).then(r => r.json());
+            if (r.ok) {
+                _cachedKWAt = 0;
+                renderQuickSearchTags();
+            } else {
+                alert('삭제 실패: xlsx 기본 25개는 삭제 불가');
+            }
         }
 
         // ── 검색 ──
@@ -765,17 +808,29 @@
             }).join('');
         }
 
-        // ── 결과 내 재검색 ──
+        // ── 결과 내 재검색 (다중 키워드 + OR/AND) ──
         function applySubSearch() {
-            const subKeyword = document.getElementById('subSearchKeyword').value.trim().toLowerCase();
-            if (!subKeyword) {
+            const raw = document.getElementById('subSearchKeyword').value.trim();
+            const mode = (document.getElementById('subSearchMode')?.value || 'or').toLowerCase();
+            // 쉼표로 여러 키워드 분리, 빈값 제거, 소문자화
+            const keywords = raw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+
+            if (keywords.length === 0) {
                 filteredData = [...mergedData];
             } else {
-                filteredData = mergedData.filter(item =>
-                    (item.title && item.title.toLowerCase().includes(subKeyword)) ||
-                    (item.organization && item.organization.toLowerCase().includes(subKeyword)) ||
-                    (item.number && item.number.toLowerCase().includes(subKeyword))
-                );
+                filteredData = mergedData.filter(item => {
+                    const haystack = [
+                        (item.title || ''),
+                        (item.organization || ''),
+                        (item.number || '')
+                    ].join(' ').toLowerCase();
+
+                    if (mode === 'and') {
+                        return keywords.every(kw => haystack.includes(kw));
+                    } else {
+                        return keywords.some(kw => haystack.includes(kw));
+                    }
+                });
             }
             currentPage = 1;
             renderTable();
@@ -783,6 +838,8 @@
 
         function clearSubSearch() {
             document.getElementById('subSearchKeyword').value = '';
+            const modeEl = document.getElementById('subSearchMode');
+            if (modeEl) modeEl.value = 'or';
             filteredData = [...mergedData];
             currentPage = 1;
             renderTable();
@@ -870,7 +927,7 @@
                     <td style="color:#6c757d; font-size:0.8rem;">${num}</td>
                     <td>${titleHtml}</td>
                     <td><span class="source-badge">${sourceName}</span></td>
-                    <td style="font-size:0.82rem; color:#6c757d;">${dateStr}</td>
+                    <td style="font-size:0.82rem; color:#6c757d; white-space:nowrap;">${dateStr}</td>
                 </tr>`;
             }).join('');
 

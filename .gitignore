@@ -21,3 +21,22 @@ crawlers.db-journal
 crawlers.db-wal
 crawlers.db-shm
 *.log
+
+# Fly.io / Docker
+.fly/
+fly.local.toml
+.dockerignore.bak
+
+# 환경변수 파일
+.env.local
+.env.production
+
+# 추가 DB 파일 (커밋 방지)
+crawl_data.db
+crawler.db
+crawler_data.db
+*.db-journal
+*.db-wal
+*.db-shm
+sh_search_crawler.py
+

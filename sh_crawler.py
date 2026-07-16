@@ -41,29 +41,42 @@ class SHCrawler:
         self.session.mount("http://", adapter)
         self.session.verify = False
 
+    # 전체 카테고리 multi_itm_seqs (공고 및 공지 > 전체)
+    MULTI_ITM_SEQS = "1,2,4,8,16,32,64,128,256,512"
+
     def _fetch_page(self, page: int, keyword: str = "") -> Optional[BeautifulSoup]:
         """Fetch a single page via POST."""
         data = {
             "page": str(page),
+            "pageIndex": str(page),
+            "multi_itm_seqs": self.MULTI_ITM_SEQS,
             "srchTp": "0",
             "srchWord": keyword,
         }
-        try:
-            resp = self.session.post(self.LIST_URL, data=data, timeout=30)
-            resp.raise_for_status()
-            return BeautifulSoup(resp.text, "lxml")
-        except requests.RequestException as e:
-            print(f"[ERROR] Failed to fetch page {page}: {e}")
-            return None
+        for attempt in range(3):
+            try:
+                resp = self.session.post(self.LIST_URL, data=data, timeout=30)
+                resp.raise_for_status()
+                return BeautifulSoup(resp.text, "lxml")
+            except requests.RequestException:
+                if attempt < 2:
+                    import time
+                    time.sleep(1)
+        return None
 
     def _get_total_pages(self, soup: BeautifulSoup) -> int:
-        """Extract total page count from 'totalN건 [page/totalPages페이지]'."""
+        """Extract total pages: 'mentcount [N/M페이지]' 또는 getPaging(M, ...)"""
         mentcount = soup.select_one("div.mentcount")
         if mentcount:
             text = mentcount.get_text(strip=True)
             m = re.search(r'\[(\d+)/(\d+)페이지\]', text)
             if m:
                 return int(m.group(2))
+        # getPaging(N, ...) 마지막 페이지
+        html = str(soup)
+        m = re.search(r'getPaging\((\d+),', html)
+        if m:
+            return int(m.group(1))
         return 1
 
     def _parse_rows(self, soup: BeautifulSoup) -> list[dict]:

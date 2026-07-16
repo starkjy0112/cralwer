@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>크롤러 관리자 - xlsx 요구기능</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+  body { background:#f4f6f9; font-family:'Apple SD Gothic Neo','Malgun Gothic',sans-serif; }
+  .header { background:#1e293b; color:#fff; padding:1rem 2rem; }
+  .tab-content { background:#fff; padding:1.5rem; border-radius:0 0 8px 8px; box-shadow:0 2px 8px rgba(0,0,0,.05); }
+  .nav-tabs .nav-link { color:#334155; }
+  .nav-tabs .nav-link.active { background:#fff; color:#0d6efd; font-weight:bold; }
+  .badge-default { background:#0d6efd; }
+  .badge-custom { background:#10b981; }
+  .kw-chip { display:inline-flex; align-items:center; gap:6px; margin:4px; padding:6px 12px; background:#e0e7ff; border-radius:20px; }
+  .kw-chip.default { background:#dbeafe; }
+  .kw-chip .btn-close { font-size:.6rem; }
+  .table-sm td, .table-sm th { padding:.4rem; }
+  .status-ok { color:#10b981; font-weight:bold; }
+  .status-fail { color:#dc2626; font-weight:bold; }
+  .status-unknown { color:#94a3b8; }
+  .modal-body input, .modal-body textarea { margin-bottom:.5rem; }
+</style>
+</head>
+<body>
+
+<div class="header d-flex justify-content-between align-items-center">
+  <div>
+    <h4 class="m-0">크롤러 관리자</h4>
+    <small class="text-secondary">xlsx 요구 기능 5가지 통합 UI</small>
+  </div>
+  <div>
+    <a href="/" class="btn btn-outline-light btn-sm">← 대시보드</a>
+    <a href="/unified" class="btn btn-outline-light btn-sm">통합검색</a>
+  </div>
+</div>
+
+<div class="container-fluid mt-3">
+
+<ul class="nav nav-tabs" id="mainTabs">
+  <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-keywords">① 검색어 관리</a></li>
+  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-urls">② 게시판 링크 관리</a></li>
+  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-status">③ 링크 검증</a></li>
+  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-fallback">④ 통합검색 폴백</a></li>
+</ul>
+
+<div class="tab-content">
+
+  <!-- ① 검색어 관리 -->
+  <div class="tab-pane fade show active" id="tab-keywords">
+    <h5>검색어 관리 <small class="text-muted">(xlsx ① 25개 기본 + 사용자 추가)</small></h5>
+
+    <div class="alert alert-info mb-3">
+      xlsx가 요구한 기본 25개 기술 키워드는 파란색, 사용자 추가는 초록색으로 표시됩니다. 기본 키워드는 삭제 불가.
+    </div>
+
+    <div class="input-group mb-3" style="max-width:400px;">
+      <input type="text" id="new-keyword" class="form-control" placeholder="새 검색어 입력">
+      <button class="btn btn-primary" onclick="addKeyword()">추가</button>
+    </div>
+
+    <div id="keywords-list"></div>
+  </div>
+
+  <!-- ② 게시판 링크 관리 -->
+  <div class="tab-pane fade" id="tab-urls">
+    <h5>게시판 링크 관리 <small class="text-muted">(크롤러별 URL 편집)</small></h5>
+
+    <div class="mb-3 d-flex gap-2 align-items-center flex-wrap">
+      <button class="btn btn-primary btn-sm" onclick="openUrlModal()">+ 새 URL 추가</button>
+      <button class="btn btn-outline-secondary btn-sm" onclick="loadUrls()">새로고침</button>
+      <span id="warning-summary" class="ms-auto"></span>
+    </div>
+
+    <table class="table table-sm table-hover">
+      <thead class="table-light">
+        <tr>
+          <th>크롤러</th>
+          <th style="width:60px;">🚨</th>
+          <th>게시판</th>
+          <th>URL</th>
+          <th>폴백 URL</th>
+          <th style="width:120px;">최근 크롤</th>
+          <th>상태</th>
+          <th>수정</th>
+        </tr>
+      </thead>
+      <tbody id="urls-tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- ③ 링크 검증 -->
+  <div class="tab-pane fade" id="tab-status">
+    <h5>링크 검증 결과 <small class="text-muted">(잘못된 링크 자동 감지)</small></h5>
+
+    <div class="mb-3">
+      <button class="btn btn-warning btn-sm" onclick="runValidate()">전체 URL 검증 시작</button>
+      <button class="btn btn-outline-secondary btn-sm" onclick="loadLinkStatus()">결과 새로고침</button>
+      <label class="ms-3">
+        <input type="checkbox" id="invalid-only" onchange="loadLinkStatus()"> 실패한 것만 보기
+      </label>
+    </div>
+
+    <table class="table table-sm">
+      <thead class="table-light">
+        <tr><th>크롤러</th><th>URL</th><th>상태</th><th>HTTP</th><th>에러</th><th>검증 시각</th></tr>
+      </thead>
+      <tbody id="status-tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- ④ 통합검색 폴백 -->
+  <div class="tab-pane fade" id="tab-fallback">
+    <h5>통합검색 폴백 <small class="text-muted">(지정 게시판 실패 시 대체 URL)</small></h5>
+
+    <div class="alert alert-info">
+      각 크롤러의 <b>fallback_url</b>은 "② 게시판 링크 관리" 탭에서 URL 편집 시 설정합니다.
+      링크 검증 실패 시 자동으로 폴백 URL이 제공됩니다.
+    </div>
+
+    <table class="table table-sm">
+      <thead class="table-light">
+        <tr><th>크롤러</th><th>기본 URL</th><th>폴백 URL</th><th>기본 URL 상태</th></tr>
+      </thead>
+      <tbody id="fallback-tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- ⑤ 삭제됨: 대시보드/통합검색 "결과 내 검색"에 다중 키워드 + AND/OR 기능이 통합됨 -->
+
+</div>
+</div>
+
+<!-- URL 추가/편집 모달 -->
+<div class="modal fade" id="urlModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header">
+      <h5 class="modal-title">게시판 URL 편집</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="url-id">
+      <label>크롤러 ID</label>
+      <input type="text" id="url-crawler-id" class="form-control" placeholder="jndc">
+      <label>크롤러 이름</label>
+      <input type="text" id="url-crawler-name" class="form-control" placeholder="전남개발공사">
+      <label>게시판 키</label>
+      <input type="text" id="url-board-key" class="form-control" placeholder="default 또는 notice, bid 등">
+      <label>게시판 이름</label>
+      <input type="text" id="url-board-name" class="form-control" placeholder="입찰공고">
+      <label>기본 URL *</label>
+      <input type="text" id="url-url" class="form-control" placeholder="https://...">
+      <label>폴백 URL (선택)</label>
+      <input type="text" id="url-fallback" class="form-control" placeholder="지정 URL 실패 시 대체">
+      <label>메모</label>
+      <textarea id="url-notes" class="form-control" rows="2"></textarea>
+      <label class="mt-2"><input type="checkbox" id="url-active" checked> 활성</label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+      <button class="btn btn-primary" onclick="saveUrl()">저장</button>
+    </div>
+  </div></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// ---------- XSS 방어 유틸 ----------
+function escapeHtml(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function safeHref(u) {
+  if (!u) return '#';
+  const s = String(u).trim();
+  if (/^https?:\/\//i.test(s)) return s.replace(/"/g,'%22').replace(/'/g,'%27');
+  return '#';
+}
+
+// ---------- ① 검색어 ----------
+async function loadKeywords() {
+  const r = await fetch('/api/keywords').then(r=>r.json());
+  const html = r.map(k => `
+    <span class="kw-chip ${k.is_default?'default':''}">
+      <span>${escapeHtml(k.keyword)}</span>
+      <span class="badge ${k.is_default?'badge-default text-white':'badge-custom text-white'}">${k.is_default?'기본':'커스텀'}</span>
+      ${k.is_default?'':`<button class="btn-close" onclick="delKeyword(${k.id})"></button>`}
+    </span>
+  `).join('');
+  document.getElementById('keywords-list').innerHTML = html;
+}
+
+async function addKeyword() {
+  const kw = document.getElementById('new-keyword').value.trim();
+  if (!kw) return;
+  const r = await fetch('/api/keywords', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({keyword: kw})
+  }).then(r=>r.json());
+  if (r.ok) {
+    document.getElementById('new-keyword').value = '';
+    loadKeywords();
+  } else {
+    alert('추가 실패: ' + (r.error || ''));
+  }
+}
+
+async function delKeyword(id) {
+  if (!confirm('삭제하시겠습니까?')) return;
+  await fetch(`/api/keywords/${id}`, {method:'DELETE'});
+  loadKeywords();
+}
+
+// ---------- ② URL (+ 실패 알림 뱃지) ----------
+async function loadUrls() {
+  const r = await fetch('/api/urls').then(r=>r.json());
+  let warnCount = 0;
+  const html = r.map(u => {
+    const errShort = escapeHtml((u.last_error||'').substring(0,120));
+    // 실패 뱃지 로직
+    let warnCell = '';
+    if (u.warn) {
+      warnCount++;
+      warnCell = `<span class="badge bg-danger" title="${errShort}">🚨 실패</span>`;
+    } else if (u.last_error) {
+      warnCell = `<span class="badge bg-warning text-dark" title="${errShort}">⚠ 주의</span>`;
+    } else if (u.last_count > 0) {
+      warnCell = `<span class="badge bg-success">✓ OK</span>`;
+    } else {
+      warnCell = `<span class="text-muted">-</span>`;
+    }
+
+    // 최근 크롤 시각
+    let lastRunCell = '-';
+    if (u.last_run_at) {
+      const t = escapeHtml(u.last_run_at.substring(5, 16).replace('T', ' '));
+      const hs = u.hours_since_run;
+      let color = 'text-muted';
+      if (hs > 24) color = 'text-danger';
+      else if (hs > 6) color = 'text-warning';
+      lastRunCell = `<small class="${color}" title="${escapeHtml(u.last_run_at)}">${t}<br>(${escapeHtml(String(hs))}h전, ${escapeHtml(String(u.last_count||0))}건)</small>`;
+    }
+
+    // 크롤러 이름 옆에 폴백 URL 등록 권장 표시
+    let nameCell = `<b>${escapeHtml(u.crawler_name || u.crawler_id)}</b><br><small class="text-muted">${escapeHtml(u.crawler_id)}</small>`;
+    if (u.warn && !u.fallback_url) {
+      nameCell += `<br><small class="text-danger">💡 폴백 URL 등록 권장</small>`;
+    }
+
+    const urlSafe = safeHref(u.url);
+    const urlText = escapeHtml((u.url || '').substring(0,50)) + '...';
+    const fbSafe = u.fallback_url ? safeHref(u.fallback_url) : '';
+    const fbText = u.fallback_url ? escapeHtml(u.fallback_url.substring(0,30)) + '...' : '';
+
+    return `
+      <tr class="${u.warn?'table-danger':''}">
+        <td>${nameCell}</td>
+        <td>${warnCell}</td>
+        <td>${escapeHtml(u.board_name || u.board_key || '-')}</td>
+        <td><a href="${urlSafe}" target="_blank" style="word-break:break-all;">${urlText}</a></td>
+        <td>${u.fallback_url ? `<a href="${fbSafe}" target="_blank">${fbText}</a>` : '<span class="text-muted">미설정</span>'}</td>
+        <td>${lastRunCell}</td>
+        <td>${u.is_active?'<span class="status-ok">활성</span>':'<span class="text-muted">비활성</span>'}</td>
+        <td>
+          <button class="btn btn-sm btn-outline-primary" onclick='openUrlModal(${JSON.stringify(u).replace(/'/g, "&#39;")})'>수정</button>
+          <button class="btn btn-sm btn-outline-danger" onclick="delUrl(${u.id})">×</button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  document.getElementById('urls-tbody').innerHTML = html ||
+    '<tr><td colspan="8" class="text-muted text-center">등록된 URL 없음</td></tr>';
+
+  // 상단 요약 뱃지
+  const summaryEl = document.getElementById('warning-summary');
+  if (warnCount > 0) {
+    summaryEl.innerHTML = `<span class="badge bg-danger fs-6">🚨 실패 중 ${warnCount}개 - 폴백 URL 등록 권장</span>`;
+  } else {
+    summaryEl.innerHTML = `<span class="badge bg-success fs-6">✓ 모든 크롤러 정상</span>`;
+  }
+
+  loadFallbackTable();
+}
+
+function openUrlModal(u) {
+  const set = (id, v) => document.getElementById(id).value = v || '';
+  set('url-id', u?.id || '');
+  set('url-crawler-id', u?.crawler_id || '');
+  set('url-crawler-name', u?.crawler_name || '');
+  set('url-board-key', u?.board_key || 'default');
+  set('url-board-name', u?.board_name || '');
+  set('url-url', u?.url || '');
+  set('url-fallback', u?.fallback_url || '');
+  set('url-notes', u?.notes || '');
+  document.getElementById('url-active').checked = u?.is_active !== 0;
+  new bootstrap.Modal(document.getElementById('urlModal')).show();
+}
+
+async function saveUrl() {
+  const d = {
+    crawler_id: document.getElementById('url-crawler-id').value.trim(),
+    crawler_name: document.getElementById('url-crawler-name').value.trim(),
+    board_key: document.getElementById('url-board-key').value.trim() || 'default',
+    board_name: document.getElementById('url-board-name').value.trim(),
+    url: document.getElementById('url-url').value.trim(),
+    fallback_url: document.getElementById('url-fallback').value.trim() || null,
+    notes: document.getElementById('url-notes').value.trim() || null,
+    is_active: document.getElementById('url-active').checked ? 1 : 0,
+  };
+  const r = await fetch('/api/urls', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(d)
+  }).then(r=>r.json());
+  if (r.ok) {
+    bootstrap.Modal.getInstance(document.getElementById('urlModal')).hide();
+    loadUrls();
+  } else {
+    alert('저장 실패: ' + (r.error || ''));
+  }
+}
+
+async function delUrl(id) {
+  if (!confirm('삭제하시겠습니까?')) return;
+  await fetch(`/api/urls/${id}`, {method:'DELETE'});
+  loadUrls();
+}
+
+// ---------- ③ 링크 검증 ----------
+async function runValidate() {
+  const r = await fetch('/api/urls/validate', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({})
+  }).then(r=>r.json());
+  if (r.ok) {
+    alert(`${r.queued}개 URL 검증 시작. 백그라운드로 실행됨. 잠시 후 새로고침.`);
+  } else {
+    alert('검증 실패: ' + (r.error || ''));
+  }
+}
+
+async function loadLinkStatus() {
+  const invalidOnly = document.getElementById('invalid-only').checked;
+  const url = '/api/urls/status' + (invalidOnly ? '?invalid_only=1' : '');
+  const r = await fetch(url).then(r=>r.json());
+  const html = r.map(s => `
+    <tr>
+      <td>${escapeHtml(s.crawler_id)}</td>
+      <td><a href="${safeHref(s.url)}" target="_blank">${escapeHtml((s.url||'').substring(0,60))}...</a></td>
+      <td>${s.is_valid ? '<span class="status-ok">✓ OK</span>' : '<span class="status-fail">✗ FAIL</span>'}</td>
+      <td>${escapeHtml(String(s.http_status || '-'))}</td>
+      <td><small>${escapeHtml(s.error_msg || '')}</small></td>
+      <td><small>${escapeHtml(s.last_checked_at || '')}</small></td>
+    </tr>
+  `).join('');
+  document.getElementById('status-tbody').innerHTML = html || '<tr><td colspan="6" class="text-muted text-center">검증 결과 없음. "전체 URL 검증 시작" 버튼을 눌러 시작.</td></tr>';
+}
+
+// ---------- ④ 폴백 ----------
+async function loadFallbackTable() {
+  const urls = await fetch('/api/urls').then(r=>r.json());
+  const statuses = await fetch('/api/urls/status').then(r=>r.json());
+  const statusMap = {};
+  statuses.forEach(s => { statusMap[s.crawler_id + '|' + s.url] = s; });
+
+  const html = urls.map(u => {
+    const s = statusMap[u.crawler_id + '|' + u.url];
+    let stCell = '<span class="status-unknown">미검증</span>';
+    if (s) stCell = s.is_valid ? '<span class="status-ok">✓ OK</span>' : `<span class="status-fail">✗ ${escapeHtml(s.error_msg||'FAIL')}</span>`;
+    return `
+      <tr>
+        <td><b>${escapeHtml(u.crawler_name || u.crawler_id)}</b></td>
+        <td><a href="${safeHref(u.url)}" target="_blank">${escapeHtml((u.url||'').substring(0,50))}...</a></td>
+        <td>${u.fallback_url ? `<a href="${safeHref(u.fallback_url)}" target="_blank">${escapeHtml(u.fallback_url.substring(0,40))}...</a>` : '<span class="text-muted">미설정</span>'}</td>
+        <td>${stCell}</td>
+      </tr>
+    `;
+  }).join('');
+  document.getElementById('fallback-tbody').innerHTML = html || '<tr><td colspan="4" class="text-muted text-center">등록된 URL 없음</td></tr>';
+}
+
+// ⑤ 결과 내 재검색 → 대시보드/통합검색으로 통합 이관됨
+
+// 초기 로드
+loadKeywords();
+loadUrls();
+loadLinkStatus();
+
+// Enter로 검색어 추가
+document.getElementById('new-keyword').addEventListener('keypress', e => {
+  if (e.key === 'Enter') addKeyword();
+});
+</script>
+
+</body>
+</html>

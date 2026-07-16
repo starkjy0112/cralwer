@@ -1,0 +1,50 @@
+# Fly.io 배포 설정
+# 배포: fly launch (첫 배포) → fly deploy (이후 재배포)
+# 앱 이름은 launch 시 자동 생성됨 (원하면 --name 옵션)
+
+app = "bid-crawler-dashboard"
+primary_region = "nrt"  # Tokyo (한국에서 가장 가까운 리전)
+
+[build]
+  dockerfile = "Dockerfile"
+
+# HTTP 서비스 설정
+[http_service]
+  internal_port = 5001
+  force_https = true
+  auto_stop_machines = "off"      # 무료 요금제도 sleep 없게 (24/7 실행)
+  auto_start_machines = true
+  min_machines_running = 1        # 항상 1대 이상 실행
+  processes = ["app"]
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "10s"
+    grace_period = "60s"
+    method = "GET"
+    path = "/health"
+
+# 환경변수 (비민감)
+[env]
+  PORT = "5001"
+  DB_PATH = "/data/crawlers.db"
+  PYTHONUNBUFFERED = "1"
+  FLASK_ENV = "production"
+  TZ = "Asia/Seoul"
+
+# 영속 디스크 (SQLite DB 저장)
+[[mounts]]
+  source = "crawler_data"   # 볼륨 이름
+  destination = "/data"     # 컨테이너 마운트 경로
+
+# VM 스펙 (무료 티어 내)
+[[vm]]
+  size = "shared-cpu-1x"    # 무료
+  memory = "512mb"          # 무료 티어 최대
+  cpu_kind = "shared"
+  cpus = 1
+
+# 배포 옵션
+[deploy]
+  strategy = "immediate"     # 볼륨 마운트는 zero-downtime 안 되므로 즉시 교체
+  wait_timeout = "10m"

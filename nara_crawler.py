@@ -3,13 +3,18 @@
 나라장터(G2B) 입찰공고 크롤러
 공공데이터포털 Open API 사용
 """
+import os
 import requests
 from requests.adapters import HTTPAdapter
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# API 설정
-API_KEY = "dda419df735cfb226cff2561e3fd9eca16b0eda9730135bdbbca9a30510aa1d8"
+# API 설정: 환경변수 우선. 미설정 시 기존 키 사용 (backward compat).
+# ⚠ 프로덕션에서는 반드시 NARA_API_KEY 환경변수로 설정하세요.
+API_KEY = os.environ.get(
+    "NARA_API_KEY",
+    "dda419df735cfb226cff2561e3fd9eca16b0eda9730135bdbbca9a30510aa1d8"
+)
 BASE_URL = "https://apis.data.go.kr/1230000/ad/BidPublicInfoService"
 
 

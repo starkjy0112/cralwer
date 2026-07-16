@@ -467,18 +467,53 @@
                 <span>통합 검색</span>
                 <span class="badge bg-primary">NEW</span>
             </a>
+            <a class="nav-item" href="/admin" style="background: rgba(220, 53, 69, 0.15);">
+                <i class="bi bi-gear-fill"></i>
+                <span>관리자</span>
+                <span class="badge bg-danger">ADMIN</span>
+            </a>
         </div>
 
         <div class="nav-section">
-            <div class="nav-section-title">크롤러 목록</div>
+            <div class="nav-section-title" style="display:flex; justify-content:space-between; align-items:center;">
+                <span>크롤러 목록</span>
+                <label style="font-size:0.7rem; color:#94a3b8; cursor:pointer; display:flex; align-items:center; gap:4px;">
+                    <input type="checkbox" id="showAllCrawlers" onchange="toggleCrawlerList()">
+                    전체 보기
+                </label>
+            </div>
+            {% set verified_set = verified_ids|default([])|list %}
             {% for key, crawler in crawlers.items() %}
-            <a class="nav-item" data-crawler="{{ key }}" onclick="selectCrawler('{{ key }}')">
+            <a class="nav-item crawler-item {% if key not in verified_set %}unverified-crawler{% endif %}"
+               data-crawler="{{ key }}"
+               data-verified="{{ 1 if key in verified_set else 0 }}"
+               onclick="selectCrawler('{{ key }}')"
+               {% if key not in verified_set %}style="display:none;"{% endif %}>
                 <i class="bi bi-building"></i>
                 <span>{{ crawler.name }}</span>
+                {% if key in verified_set %}
+                <span class="badge bg-success" style="font-size:0.6rem;" title="검증완료">✓</span>
+                {% else %}
+                <span class="badge bg-warning text-dark" style="font-size:0.6rem;" title="미검증">?</span>
+                {% endif %}
                 <span class="badge bg-secondary">{{ crawler.type }}</span>
             </a>
             {% endfor %}
         </div>
+
+        <script>
+        // 크롤러 목록 필터 토글
+        function toggleCrawlerList() {
+            const showAll = document.getElementById('showAllCrawlers').checked;
+            document.querySelectorAll('.crawler-item').forEach(el => {
+                if (showAll || el.dataset.verified === '1') {
+                    el.style.display = '';
+                } else {
+                    el.style.display = 'none';
+                }
+            });
+        }
+        </script>
 
         <div class="nav-section" style="margin-top: auto; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.1);">
             <div class="nav-section-title">도구</div>
@@ -536,9 +571,15 @@
             <!-- 결과 내 재검색 -->
             <div id="subSearchWrap" style="margin-top: 10px; display: none; gap: 8px; align-items: center;">
                 <span style="font-size: 0.82rem; color: #6c757d;"><i class="bi bi-funnel"></i> 결과 내 검색:</span>
-                <input type="text" id="subSearchKeyword" placeholder="결과 내에서 추가 검색..."
-                    style="padding: 5px 10px; border: 1px solid #dee2e6; border-radius: 6px; font-size: 0.82rem; width: 200px;"
-                    oninput="applySubSearch()">
+                <input type="text" id="subSearchKeyword" placeholder="여러 키워드 쉼표 구분 (예: 공사, 용역, 특허)"
+                    style="padding: 5px 10px; border: 1px solid #dee2e6; border-radius: 6px; font-size: 0.82rem; width: 320px;"
+                    oninput="applySubSearch()"
+                    title="쉼표(,)로 여러 키워드. 모드에 따라 OR/AND">
+                <select id="subSearchMode" onchange="applySubSearch()"
+                    style="padding: 5px 8px; border: 1px solid #dee2e6; border-radius: 6px; font-size: 0.78rem;">
+                    <option value="or">OR (하나라도)</option>
+                    <option value="and">AND (전부)</option>
+                </select>
                 <button onclick="clearSubSearch()" class="btn btn-sm btn-outline-secondary" style="font-size: 0.75rem;">초기화</button>
             </div>
         </div>
@@ -597,7 +638,7 @@
                             <th>제목</th>
                             <th style="width: 60px;">업무</th>
                             <th style="width: 120px;">공고기관</th>
-                            <th style="width: 180px;">게시일시(마감일시)</th>
+                            <th style="width: 200px; white-space: nowrap;">게시일시(마감일시)</th>
                             <th style="width: 80px;">입찰진행</th>
                         </tr>
                     </thead>
@@ -641,38 +682,58 @@
         let dateEnd = null;
         let dateFilterEnabled = false;
 
-        // 빠른 검색어 관리
-        const DEFAULT_QUICK_SEARCHES = [
-            '기본설계', '실시설계', '기술제안', '제안서', '신기술', '공법',
-            '특허', '발파', '미진동', '무진동', '절토', '토공', '토목',
-            '부지조성', '산업단지', '조성공사', '개발사업'
-        ];
+        // 빠른 검색어 관리 - DB(/api/keywords) 기반. admin 페이지와 실시간 동기화.
+        let _cachedKeywords = null;
+        let _cachedKeywordsAt = 0;
 
-        function getQuickSearches() {
-            const saved = localStorage.getItem('quickSearches');
-            return saved ? JSON.parse(saved) : DEFAULT_QUICK_SEARCHES;
+        async function getQuickSearches() {
+            // 5분 캐시 (admin에서 추가한 것 자동 반영)
+            const now = Date.now();
+            if (_cachedKeywords && (now - _cachedKeywordsAt) < 5 * 60 * 1000) {
+                return _cachedKeywords.map(k => k.keyword);
+            }
+            try {
+                const r = await fetch('/api/keywords').then(r => r.json());
+                _cachedKeywords = r;
+                _cachedKeywordsAt = now;
+                return r.map(k => k.keyword);
+            } catch (e) {
+                // 폴백: xlsx 기본 25개
+                return [
+                    '기본설계', '실시설계', '기술제안', '제안서', '신기술', '공법',
+                    '특허', '특정', '발파', '암발파', '미진동', '무진동',
+                    '암절취', '흙깍기', '절토', '토공', '토목', '토건',
+                    '제출', '제안', '부지조성', '단지조성', '산업단지',
+                    '조성공사', '개발사업'
+                ];
+            }
         }
 
-        function saveQuickSearches(list) {
-            localStorage.setItem('quickSearches', JSON.stringify(list));
-        }
-
-        // 결과 내 재검색
+        // 결과 내 재검색 (다중 키워드 + OR/AND)
         function applySubSearch() {
-            const subKeyword = document.getElementById('subSearchKeyword').value.trim().toLowerCase();
-            if (!subKeyword) {
+            const raw = document.getElementById('subSearchKeyword').value.trim();
+            const mode = (document.getElementById('subSearchMode')?.value || 'or').toLowerCase();
+            const keywords = raw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+
+            if (keywords.length === 0) {
                 filteredData = [...currentData];
             } else {
-                filteredData = currentData.filter(item =>
-                    (item.title && item.title.toLowerCase().includes(subKeyword)) ||
-                    (item.organization && item.organization.toLowerCase().includes(subKeyword)) ||
-                    (item.number && item.number.toLowerCase().includes(subKeyword))
-                );
+                filteredData = currentData.filter(item => {
+                    const haystack = [
+                        (item.title || ''),
+                        (item.organization || ''),
+                        (item.number || '')
+                    ].join(' ').toLowerCase();
+                    if (mode === 'and') {
+                        return keywords.every(kw => haystack.includes(kw));
+                    } else {
+                        return keywords.some(kw => haystack.includes(kw));
+                    }
+                });
             }
             currentPage = 1;
             renderTableFromData(filteredData);
-            const total = filteredData.length;
-            document.getElementById('statResults').textContent = total;
+            document.getElementById('statResults').textContent = filteredData.length;
         }
 
         function clearSubSearch() {
@@ -683,14 +744,20 @@
             document.getElementById('statResults').textContent = currentData.length;
         }
 
-        function renderQuickSearchTags() {
-            const tags = getQuickSearches();
+        async function renderQuickSearchTags() {
+            const tags = await getQuickSearches();
             const container = document.getElementById('quickSearchTags');
-            container.innerHTML = tags.map((kw, idx) =>
-                `<span class="badge bg-light text-dark border" style="cursor:pointer; font-size:0.78rem; padding:4px 10px;" onclick="quickSearch('${kw}')">
-                    ${kw}
-                    <i class="bi bi-x" style="margin-left:3px; cursor:pointer; color:#dc3545;" onclick="event.stopPropagation(); removeQuickSearch(${idx})"></i>
+            // is_default 여부 함께 (chip 색 구분)
+            const list = _cachedKeywords || [];
+            container.innerHTML = list.map(k =>
+                `<span class="badge ${k.is_default?'bg-primary':'bg-success'} text-white"
+                       style="cursor:pointer; font-size:0.78rem; padding:4px 10px;"
+                       onclick="quickSearch('${k.keyword}')" title="${k.is_default?'xlsx 기본':'사용자 추가'}">
+                    ${k.keyword}
+                    ${k.is_default?'':`<i class="bi bi-x" style="margin-left:3px; cursor:pointer;" onclick="event.stopPropagation(); removeQuickSearch(${k.id})"></i>`}
                 </span>`
+            ).join('') || tags.map(kw =>
+                `<span class="badge bg-light text-dark border" style="cursor:pointer; font-size:0.78rem; padding:4px 10px;" onclick="quickSearch('${kw}')">${kw}</span>`
             ).join('');
         }
 
@@ -699,23 +766,31 @@
             performSearch();
         }
 
-        function addQuickSearch() {
+        async function addQuickSearch() {
             const kw = prompt('추가할 검색어를 입력하세요:');
-            if (kw && kw.trim()) {
-                const list = getQuickSearches();
-                if (!list.includes(kw.trim())) {
-                    list.push(kw.trim());
-                    saveQuickSearches(list);
-                    renderQuickSearchTags();
-                }
+            if (!kw || !kw.trim()) return;
+            const r = await fetch('/api/keywords', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({keyword: kw.trim()})
+            }).then(r => r.json());
+            if (r.ok) {
+                _cachedKeywordsAt = 0; // 캐시 무효화
+                renderQuickSearchTags();
+            } else {
+                alert('추가 실패: ' + (r.error || '이미 있는 검색어일 수 있음'));
             }
         }
 
-        function removeQuickSearch(idx) {
-            const list = getQuickSearches();
-            list.splice(idx, 1);
-            saveQuickSearches(list);
-            renderQuickSearchTags();
+        async function removeQuickSearch(kwId) {
+            if (!confirm('삭제하시겠습니까?')) return;
+            const r = await fetch(`/api/keywords/${kwId}`, {method: 'DELETE'}).then(r => r.json());
+            if (r.ok) {
+                _cachedKeywordsAt = 0;
+                renderQuickSearchTags();
+            } else {
+                alert('삭제 실패: xlsx 기본 25개는 삭제할 수 없습니다.');
+            }
         }
 
         // 페이지 로드 시 빠른 검색어 렌더링
@@ -847,18 +922,39 @@
             if (pageData.length === 0) { renderEmptyState(); return; }
             tbody.innerHTML = pageData.map((item, idx) => {
                 const num = item.is_notice ? '<span class="badge-notice">공지</span>' :
-                           (item.number || item.num || item.bid_no || (start + idx + 1));
-                const org = item.announce_org || item.organization || item.writer || '-';
-                const postDate = formatDateTime(item.date);
-                const deadline = item.deadline ? formatDateTime(item.deadline) : '';
+                           escapeHtml(String(item.number || item.num || item.bid_no || (start + idx + 1)));
+                const org = escapeHtml(item.announce_org || item.organization || item.writer || '-');
+                const postDate = escapeHtml(formatDateTime(item.date));
+                const deadline = item.deadline ? escapeHtml(formatDateTime(item.deadline)) : '';
                 const dateDisplay = deadline ? `${postDate}<br><span style="color:#ef476f;font-size:0.8em;">(${deadline})</span>` : postDate;
                 const bidStatus = getBidStatus(item.deadline);
-                const bidType = item.type || '-';
-                return `<tr onclick="window.open('${item.url || '#'}', '_blank')" style="cursor: pointer;">
-                    <td>${num}</td><td class="title-cell">${item.title || '-'}</td>
-                    <td>${org}</td><td>${dateDisplay}</td></tr>`;
+                const bidType = escapeHtml(item.type || '-');
+                const safeUrl = safeHref(item.url);
+                const safeTitle = escapeHtml(item.title || '-');
+                return `<tr onclick="window.open('${safeUrl}', '_blank')" style="cursor: pointer;">
+                    <td>${num}</td><td class="title-cell">${safeTitle}</td>
+                    <td>${org}</td><td style="white-space:nowrap;">${dateDisplay}</td></tr>`;
             }).join('');
             renderPagination(filteredData.length);
+        }
+
+        // XSS 방어: URL을 http/https만 허용
+        function safeHref(u) {
+            if (!u) return '#';
+            const s = String(u).trim();
+            if (/^https?:\/\//i.test(s)) return s.replace(/'/g, '%27').replace(/"/g, '%22');
+            return '#';
+        }
+        if (typeof escapeHtml === 'undefined') {
+            window.escapeHtml = function(s) {
+                if (s === null || s === undefined) return '';
+                return String(s)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            };
         }
 
         // 테이블 렌더링
@@ -921,7 +1017,7 @@
                     <td class="title-cell">${titleLink}</td>
                     <td>${escapeHtml(bidType)}</td>
                     <td>${escapeHtml(org)}</td>
-                    <td>${dateDisplay}</td>
+                    <td style="white-space:nowrap;">${dateDisplay}</td>
                     <td>${bidStatus}</td>
                 </tr>
             `}).join('');

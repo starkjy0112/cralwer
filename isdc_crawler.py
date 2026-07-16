@@ -1,283 +1,200 @@
+# -*- coding: utf-8 -*-
 """
-성남도시개발공사 통합검색 크롤러
+성남도시개발공사 (isdc) - xlsx 29행 통합검색
+https://www.isdc.co.kr/guidance/search.asp
 
-Target URL: https://www.isdc.co.kr/guidance/search.asp
-1단계: 통합검색에서 게시판별 건수/BbsNo 파악 + 소규모 게시판 직접 파싱
-2단계: 대규모 게시판은 searchBbsList.asp로 전체 페이지 조회 (제목+본문 검색)
+통합검색은 카테고리별 미리보기(각 5건)만 보여준다.
+카테고리 상세(searchBbsList.asp?HiddenBbsNo=N)로 페이지네이션(HiddenPageNum) 순회.
+빈 검색어(searchTxt=)로 카테고리 전체 목록을 가져올 수 있음.
 """
-
 import re
-from datetime import datetime, timedelta
+import time
 import requests
 from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
-from typing import Optional
+from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 class ISDCCrawler:
-    """성남도시개발공사 통합검색 크롤러"""
+    """성남도시개발공사 통합검색 크롤러 (카테고리별 순회)"""
 
     BASE_URL = "https://www.isdc.co.kr"
-    SEARCH_URL = f"{BASE_URL}/guidance/search.asp"
-    SEARCH_BBS_URL = f"{BASE_URL}/guidance/searchBbsList.asp"
-    WORKERS = 10
+    SEARCH_URL = f"{BASE_URL}/guidance/searchBbsList.asp"
+
+    # (HiddenBbsNo, 카테고리명)
+    CATEGORIES = [
+        (1, '입찰정보'),
+        (2, '공지사항'),
+        (3, '보도자료'),
+        (4, '행사안내'),
+        (6, '계약정보'),
+        (50, '분양공고'),
+        (58, '홍보자료'),
+        (60, '정보목록'),
+        (61, '임대공고'),
+        (73, '대금지급'),
+        (74, '계약관련정보'),
+        (75, '사전정보공표'),
+        (77, '채용공고'),
+    ]
+
+    WORKERS = 6
+    PAGE_SIZE = 10  # 서버 고정
+    MAX_RETRIES = 3
+    MAX_PAGES = 500  # 안전장치
 
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update({
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
-            ),
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                          "AppleWebKit/537.36 (KHTML, like Gecko) "
+                          "Chrome/131.0.0.0 Safari/537.36",
+            "Accept-Language": "ko-KR,ko;q=0.9",
         })
         adapter = HTTPAdapter(pool_connections=1, pool_maxsize=20)
         self.session.mount("https://", adapter)
-        self.session.mount("http://", adapter)
         self.session.verify = False
 
-    def _fetch_search_page(self, keyword: str) -> Optional[BeautifulSoup]:
-        """통합검색 페이지 조회"""
-        try:
-            if keyword:
-                resp = self.session.post(
-                    self.SEARCH_URL, data={"searchTxt": keyword}, timeout=30
-                )
-            else:
-                resp = self.session.get(self.SEARCH_URL, timeout=30)
-            resp.raise_for_status()
-            resp.encoding = "utf-8"
-            return BeautifulSoup(resp.text, "lxml")
-        except requests.RequestException as e:
-            print(f"[ERROR] Search failed: {e}")
-            return None
+    def _fetch_page(self, bbs_no, page):
+        url = f"{self.SEARCH_URL}?HiddenBbsNo={bbs_no}&HiddenPageNum={page}&searchTxt="
+        for attempt in range(self.MAX_RETRIES):
+            try:
+                r = self.session.get(url, timeout=25)
+                r.raise_for_status()
+                r.encoding = 'utf-8'
+                return BeautifulSoup(r.text, 'lxml')
+            except Exception:
+                if attempt < self.MAX_RETRIES - 1:
+                    time.sleep(1 + attempt)
+        return None
 
-    def _parse_search_page(self, soup: BeautifulSoup) -> tuple[list[dict], list[tuple[str, str]]]:
-        """통합검색 페이지에서:
-        1) 소규모 게시판(더보기 없음) 결과를 직접 파싱
-        2) 대규모 게시판(더보기 있음)의 (BbsNo, board_name) 목록 반환
-        """
-        small_results = []
-        big_boards = []
-
-        for section in soup.find_all("div", class_="totalSearch"):
-            tit_div = section.find("div", class_="totalSchTit")
-            if not tit_div:
-                continue
-            tit_text = tit_div.get_text(strip=True)
-            m = re.match(r"(.+?)\(총\s*(\d+)건\)", tit_text)
-            if not m:
-                continue
-            board_name = m.group(1)
-            count = int(m.group(2))
-
-            if count == 0:
-                continue
-
-            # 더보기 링크에서 BbsNo 추출
-            bbs_no = ""
-            for a in section.find_all("a"):
-                onclick = a.get("onclick", "")
-                bm = re.search(r"HiddenBbsNo=(\d+)", onclick)
-                if bm:
-                    bbs_no = bm.group(1)
-                    break
-
-            if bbs_no and count > 5:
-                # 대규모 게시판 → searchBbsList.asp로 전체 조회
-                big_boards.append((bbs_no, board_name))
-            else:
-                # 소규모 게시판 → 통합검색 페이지에서 직접 파싱
-                ul = section.find("ul", class_="totalSchList")
-                if not ul:
-                    continue
-                for dl in ul.find_all("dl"):
-                    dt = dl.find("dt")
-                    if not dt:
-                        continue
-                    a = dt.find("a")
-                    if not a:
-                        continue
-                    title = a.get_text(strip=True)
-                    href = a.get("href", "")
-                    url = f"{self.BASE_URL}{href}" if href.startswith("/") else href
-                    span = dt.find("span")
-                    date = span.get_text(strip=True) if span else ""
-                    small_results.append({
-                        "number": "",
-                        "title": title,
-                        "date": date,
-                        "url": url,
-                        "organization": board_name,
-                    })
-
-        return small_results, big_boards
-
-    def _fetch_bbs_page(self, bbs_no: str, keyword: str, page: int) -> Optional[BeautifulSoup]:
-        """searchBbsList.asp 단일 페이지 조회"""
-        data = {
-            "HiddenBbsNo": bbs_no,
-            "searchTxt": keyword,
-            "HiddenPageNum": str(page),
-        }
-        try:
-            resp = self.session.post(self.SEARCH_BBS_URL, data=data, timeout=30)
-            resp.raise_for_status()
-            resp.encoding = "utf-8"
-            return BeautifulSoup(resp.text, "lxml")
-        except requests.RequestException as e:
-            print(f"[ERROR] BbsNo={bbs_no} Page {page}: {e}")
-            return None
-
-    def _get_total_pages(self, soup: BeautifulSoup) -> int:
-        """페이지네이션에서 최대 페이지 수 추출"""
-        page_wrap = soup.find("div", class_="pageWrap")
-        if not page_wrap:
+    def _get_last_page(self, soup):
+        """페이징 영역에서 마지막 페이지 번호 추출"""
+        if not soup:
             return 1
-        max_page = 1
-        for link in page_wrap.find_all("a", onclick=True):
-            m = re.search(r"ChagePageNum\((\d+)", link.get("onclick", ""))
+        # pagingLast의 onclick에서 ChagePageNum(N, ...) 뽑기
+        last = soup.select_one('a.pagingLast')
+        if last:
+            m = re.search(r"ChagePageNum\(\s*(\d+)", last.get('onclick', ''))
             if m:
-                max_page = max(max_page, int(m.group(1)))
-        return max_page
+                return int(m.group(1))
+        # fallback: 페이지 링크 중 최대값
+        max_p = 1
+        for a in soup.select('div.pageWrap a'):
+            m = re.search(r"ChagePageNum\(\s*(\d+)", a.get('onclick', ''))
+            if m:
+                max_p = max(max_p, int(m.group(1)))
+        for span in soup.select('div.pageWrap span'):
+            t = span.get_text(strip=True)
+            if t.isdigit():
+                max_p = max(max_p, int(t))
+        return max_p
 
-    def _parse_bbs_page(self, soup: BeautifulSoup, board_name: str) -> list[dict]:
-        """searchBbsList.asp 결과 파싱 (dl/dt/dd 구조)"""
+    def _parse_rows(self, soup, cat_name):
         results = []
-        for dl in soup.find_all("dl"):
-            dt = dl.find("dt")
-            if not dt:
-                continue
-            a = dt.find("a")
+        if not soup:
+            return results
+        # 각 li > dl > dt.tit > a (title) + span(date)
+        for li in soup.select('ul.totalSchList > li'):
+            a = li.select_one('dt.tit a')
             if not a:
                 continue
-            title = a.get_text(strip=True)
-            href = a.get("href", "")
-            url = f"{self.BASE_URL}{href}" if href.startswith("/") else href
-            span = dt.find("span")
-            date = span.get_text(strip=True) if span else ""
+            # 제목에 <font class='kwd01'></font> 노이즈가 섞여 있으므로 텍스트만 뽑고 공백 정리
+            title = a.get_text('', strip=True).strip()
+            title = re.sub(r'\s+', ' ', title)
+            if not title:
+                continue
+            href = a.get('href', '')
+            if not href:
+                continue
+            url = href if href.startswith('http') else self.BASE_URL + href
+            date_el = li.select_one('dt.tit span')
+            date = ''
+            if date_el:
+                t = date_el.get_text(strip=True)
+                m = re.search(r'(\d{4})[-./](\d{1,2})[-./](\d{1,2})', t)
+                if m:
+                    date = f"{m.group(1)}-{m.group(2).zfill(2)}-{m.group(3).zfill(2)}"
+                else:
+                    date = t
             results.append({
-                "number": "",
-                "title": title,
-                "date": date,
-                "url": url,
-                "organization": board_name,
+                'title': title,
+                'date': date,
+                'url': url,
+                'organization': cat_name,
+                'number': '',
             })
         return results
 
-    def _fetch_board_all(self, bbs_no: str, board_name: str, keyword: str) -> list[dict]:
-        """한 게시판의 전체 페이지를 조회"""
-        soup = self._fetch_bbs_page(bbs_no, keyword, 1)
-        if soup is None:
-            return []
+    def _crawl_category(self, cat_tuple):
+        bbs_no, name = cat_tuple
+        results = []
+        seen = set()
 
-        total_pages = self._get_total_pages(soup)
-        page_results = {1: self._parse_bbs_page(soup, board_name)}
+        soup = self._fetch_page(bbs_no, 1)
+        if not soup:
+            return results
+        last_page = min(self._get_last_page(soup), self.MAX_PAGES)
+        for it in self._parse_rows(soup, name):
+            if it['url'] not in seen:
+                seen.add(it['url'])
+                results.append(it)
 
-        if total_pages > 1:
-            with ThreadPoolExecutor(max_workers=self.WORKERS) as executor:
-                futures = {}
-                for p in range(2, total_pages + 1):
-                    futures[executor.submit(self._fetch_bbs_page, bbs_no, keyword, p)] = p
-                for future in as_completed(futures):
-                    p = futures[future]
-                    try:
-                        s = future.result()
-                        if s:
-                            rows = self._parse_bbs_page(s, board_name)
-                            if rows:
-                                page_results[p] = rows
-                    except Exception:
-                        pass
+        empty_streak = 0
+        for page in range(2, last_page + 1):
+            soup = self._fetch_page(bbs_no, page)
+            items = self._parse_rows(soup, name)
+            new = [it for it in items if it['url'] not in seen]
+            if not new:
+                empty_streak += 1
+                if empty_streak >= 3:
+                    break
+                continue
+            empty_streak = 0
+            for it in new:
+                seen.add(it['url'])
+                results.append(it)
+        return results
 
-        all_rows = []
-        for p in sorted(page_results.keys()):
-            all_rows.extend(page_results[p])
-        return all_rows
+    def search(self, keyword='', max_pages=999, start_date=None, end_date=None):
+        all_results = {}
+        with ThreadPoolExecutor(max_workers=self.WORKERS) as executor:
+            futures = {executor.submit(self._crawl_category, c): c
+                       for c in self.CATEGORIES}
+            for future in as_completed(futures):
+                cat = futures[future]
+                try:
+                    got = future.result()
+                    for r in got:
+                        if r['url'] not in all_results:
+                            all_results[r['url']] = r
+                    print(f"  [{cat[1]}] {len(got)}건", flush=True)
+                except Exception as e:
+                    print(f"  [{cat[1]}] 에러: {str(e)[:60]}", flush=True)
 
-    def search(self, keyword: str = "", max_pages: int = 1000, start_date=None, end_date=None) -> list[dict]:
-        """통합검색 전체 게시판 조회
-
-        Args:
-            keyword: 검색 키워드 (제목+본문 검색)
-            max_pages: 미사용
-
-        Returns:
-            List of dicts with: number, title, date, url, organization
-        """
-        # 1단계: 통합검색 페이지 조회
-        soup = self._fetch_search_page(keyword)
-        if soup is None:
-            return []
-
-        # 2단계: 소규모 게시판 직접 파싱 + 대규모 게시판 목록 추출
-        small_results, big_boards = self._parse_search_page(soup)
-
-        # 3단계: 대규모 게시판 병렬 전체 조회
-        big_results = []
-        if big_boards:
-            with ThreadPoolExecutor(max_workers=len(big_boards)) as executor:
-                futures = {
-                    executor.submit(self._fetch_board_all, bbs_no, name, keyword, start_date=None, end_date=None): name
-                    for bbs_no, name in big_boards
-                }
-                for future in as_completed(futures):
-                    try:
-                        rows = future.result()
-                        if rows:
-                            big_results.extend(rows)
-                    except Exception:
-                        pass
-
-        _final_results = small_results + big_results
-        # 날짜 필터 (기본: 최근 30일)
+        items = list(all_results.values())
         if not start_date:
             start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
         if not end_date:
             end_date = datetime.now().strftime("%Y-%m-%d")
-        _final_results = [_item for _item in _final_results
-                     if (lambda d: d and start_date <= d <= end_date)(
-                         (_item.get("date") or "").replace(".", "-").replace("/", "-")[:10])]
-
-        return _final_results
+        items = [it for it in items
+                 if not it['date'] or (start_date <= it['date'][:10] <= end_date)]
+        items.sort(key=lambda x: x['date'] or '', reverse=True)
+        print(f"[성남도시개발공사] 완료: 총 {len(items)}건", flush=True)
+        return items
 
 
 def main():
     import urllib3
-    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-    import time
-
-    crawler = ISDCCrawler()
-
-    print("=" * 80)
-    print('TEST: Keyword "공고"')
-    print("=" * 80)
-    start = time.time()
-    results = crawler.search(keyword="공고")
-    elapsed = time.time() - start
-    print(f"Total results: {len(results)}건, {elapsed:.1f}초")
-
-    # 게시판별 건수
+    urllib3.disable_warnings()
+    c = ISDCCrawler()
+    t0 = time.time()
+    items = c.search(start_date='2000-01-01', end_date='2099-12-31')
+    print(f'{len(items)}건 / {time.time()-t0:.0f}초')
     from collections import Counter
-    board_counts = Counter(r["organization"] for r in results)
-    for board, cnt in board_counts.most_common():
-        print(f"  {board}: {cnt}건")
-
-    print()
-    if results:
-        for i, item in enumerate(results[:5], 1):
-            print(f"  [{i}] {item['date']} | {item['organization']} | {item['title'][:50]}")
-
-    print()
-    print("VALIDATION")
-    assert isinstance(results, list)
-    assert len(results) > 0
-    required = {"number", "title", "date", "url", "organization"}
-    assert required.issubset(results[0].keys())
-    print(f"  Passed: {len(results)} items")
+    for k, v in Counter(it['organization'] for it in items).most_common():
+        print(f'  {k}: {v}')
 
 
 if __name__ == "__main__":

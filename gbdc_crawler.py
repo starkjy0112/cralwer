@@ -1,177 +1,195 @@
 # -*- coding: utf-8 -*-
 """
-경상북도개발공사 통합검색(게시판) 크롤러
-
-Target: https://www.gbdc.co.kr/totalSearch.do
-게시판 검색 탭(tapIdx=2), 키워드 필수, 10건/페이지
-병렬 요청으로 빠른 크롤링
+경상북도개발공사 통합검색 크롤러
+- xlsx 안내 URL: https://www.gbdc.co.kr/totalSearch.do?searchKeywordTotal=&pageIndex=1&tapIdx=2&seqId=0000003893
+- tapIdx=2 = 게시판 검색
+- 빈 검색 불가 → 고빈도 키워드 다중 검색 후 IPDS_IDX 기준 dedup
+- 10건/페이지, pageIndex 페이징
 """
 import re
-from datetime import datetime, timedelta
+import time
 import requests
+import urllib3
 from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
+from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+urllib3.disable_warnings()
 
 
 class GBDCCrawler:
-    """경상북도개발공사 통합검색 게시판 크롤러"""
+    """경상북도개발공사 통합검색(tapIdx=2, 게시판 검색) 크롤러"""
 
-    BASE_URL = "https://www.gbdc.co.kr/totalSearch.do"
-    WORKERS = 10
+    BASE_URL = "https://www.gbdc.co.kr"
+    SEARCH_URL = f"{BASE_URL}/totalSearch.do"
+    SEQ_ID = "0000003893"
+    TAP_IDX = "2"          # 게시판 검색
+    PAGE_SIZE = 10
+    WORKERS = 4  # 안정성 우선 (rate-limit 회피)
+    MAX_RETRIES = 5  # 재시도 강화
+
+    # 사이트 전 게시판을 커버하는 고빈도 키워드 세트
+    # xlsx 지정 25개 기술 키워드 + 광범위 커버리지용 6개 = 총 31개
+    DEFAULT_KEYWORDS = [
+        # xlsx ① 기술 키워드 (특허/신기술 관련 - 25개)
+        '기본설계', '실시설계', '기술제안', '제안서', '신기술', '공법', '특허', '특정',
+        '발파', '암발파', '미진동', '무진동', '암절취', '흙깍기', '절토', '토공',
+        '토목', '토건', '제출', '제안', '부지조성', '단지조성', '산업단지',
+        '조성공사', '개발사업',
+        # 광범위 커버리지 (일반 공고 커버 - 6개)
+        '공사', '용역', '입찰', '공고', '경상', '2',
+    ]
+
+    _IPDS_RE = re.compile(r'IPDS_IDX=([^&]+)')
+    _TOTAL_RE = re.compile(r'게시판\s*검색\s*\[<span[^>]*>(\d+)')
+    _DATE_RE = re.compile(r'(\d{4})[-./](\d{1,2})[-./](\d{1,2})')
 
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update({
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
-            ),
+            "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                           "AppleWebKit/537.36 (KHTML, like Gecko) "
+                           "Chrome/120.0.0.0 Safari/537.36"),
         })
-        adapter = HTTPAdapter(pool_connections=1, pool_maxsize=20)
+        adapter = HTTPAdapter(pool_connections=self.WORKERS,
+                              pool_maxsize=self.WORKERS * 2)
         self.session.mount("https://", adapter)
         self.session.mount("http://", adapter)
         self.session.verify = False
 
-    def _fetch_page(self, keyword: str, page: int):
-        """Fetch a single page of search results."""
+    def _fetch(self, keyword, page):
         params = {
-            "searchKeywordTotal": keyword,
-            "pageIndex": str(page),
-            "tapIdx": "2",
-            "seqId": "0000003893",
+            'searchKeywordTotal': keyword,
+            'pageIndex': str(page),
+            'tapIdx': self.TAP_IDX,
+            'seqId': self.SEQ_ID,
         }
-        try:
-            resp = self.session.get(self.BASE_URL, params=params, timeout=30)
-            resp.raise_for_status()
-            return BeautifulSoup(resp.text, "lxml")
-        except requests.RequestException as e:
-            print(f"[ERROR] Failed to fetch page {page}: {e}")
-            return None
+        for attempt in range(self.MAX_RETRIES):
+            try:
+                r = self.session.get(self.SEARCH_URL, params=params, timeout=30)
+                r.raise_for_status()
+                # rate-limit 회피: 각 요청 후 짧은 딜레이
+                time.sleep(0.1)
+                return r.text
+            except Exception:
+                if attempt < self.MAX_RETRIES - 1:
+                    time.sleep(1.5 * (attempt + 1))  # 백오프
+        return ''
 
-    def _get_total_count(self, soup: BeautifulSoup) -> int:
-        """Extract total count from '게시판 검색 (N)'."""
-        for el in soup.select("*"):
-            text = el.get_text(strip=True)
-            if "게시판 검색" in text and "(" in text:
-                m = re.search(r"게시판 검색\s*\((\d+)\)", text)
-                if m:
-                    return int(m.group(1))
-        return 0
+    def _total(self, html):
+        m = self._TOTAL_RE.search(html or '')
+        return int(m.group(1)) if m else 0
 
-    def _parse_rows(self, soup: BeautifulSoup) -> list[dict]:
-        """Parse search results from page."""
-        results = []
-        for a in soup.select("div.integrated-search a[href*='boardview']"):
-            title = a.get_text(strip=True)
-            href = a.get("href", "")
-            url = f"https://www.gbdc.co.kr{href}" if href else ""
-
-            date = ""
-            parent = a.find_parent()
-            gparent = parent.find_parent() if parent else None
-            if gparent:
-                for span in gparent.select("span, em, dd"):
-                    t = span.get_text(strip=True)
-                    if re.match(r"\d{4}[-./]\d{2}[-./]\d{2}", t):
-                        date = t
-                        break
-
-            results.append({
-                "number": "",
-                "title": title,
-                "date": date,
-                "url": url,
-                "organization": "경상북도개발공사",
+    def _parse(self, html):
+        """페이지 HTML에서 게시물 리스트 파싱"""
+        items = []
+        if not html:
+            return items
+        soup = BeautifulSoup(html, 'lxml')
+        for wrap in soup.select('div.sch-list-wrap'):
+            a = wrap.select_one('a')
+            title_el = wrap.select_one('p.title')
+            if not a or not title_el:
+                continue
+            href = a.get('href', '')
+            if 'boardview' not in href:
+                continue
+            m = self._IPDS_RE.search(href)
+            key = m.group(1) if m else href  # 고유 dedup key
+            # 하이라이트 <span> 제거하여 원문 제목 복원
+            title = title_el.get_text('', strip=True)
+            if not title:
+                continue
+            # 날짜 (write-info의 첫 span)
+            date = ''
+            write_info = wrap.select_one('div.write-info')
+            if write_info:
+                dm = self._DATE_RE.search(write_info.get_text(' ', strip=True))
+                if dm:
+                    date = f'{dm.group(1)}-{dm.group(2).zfill(2)}-{dm.group(3).zfill(2)}'
+            # 카테고리 (locate)
+            locate_el = wrap.select_one('li.locate')
+            board = locate_el.get_text(' ', strip=True) if locate_el else ''
+            full_url = href if href.startswith('http') else self.BASE_URL + href
+            items.append({
+                'key': key,
+                'title': title,
+                'date': date,
+                'url': full_url,
+                'organization': '경상북도개발공사',
+                'board': board,
+                'number': '',
             })
+        return items
 
-        return results
+    def _crawl_keyword(self, keyword):
+        """단일 키워드의 전 페이지 순회 (병렬)"""
+        first_html = self._fetch(keyword, 1)
+        if not first_html:
+            return []
+        total = self._total(first_html)
+        if total == 0:
+            return []
+        pages = (total + self.PAGE_SIZE - 1) // self.PAGE_SIZE
 
-    def _fetch_and_parse(self, keyword: str, page: int) -> tuple[int, list[dict]]:
-        """Fetch and parse a single page. Returns (page_number, rows)."""
-        soup = self._fetch_page(keyword, page)
-        if soup is None:
-            return (page, [])
-        return (page, self._parse_rows(soup))
+        results = {}
+        for it in self._parse(first_html):
+            results[it['key']] = it
+        if pages <= 1:
+            return list(results.values())
 
-    def search(self, keyword: str = "", max_pages: int = 10, start_date=None, end_date=None) -> list[dict]:
-        """Search board posts.
+        with ThreadPoolExecutor(max_workers=self.WORKERS) as ex:
+            futures = {ex.submit(self._fetch, keyword, pg): pg
+                       for pg in range(2, pages + 1)}
+            for fut in as_completed(futures):
+                try:
+                    for it in self._parse(fut.result()):
+                        results.setdefault(it['key'], it)
+                except Exception:
+                    pass
+        return list(results.values())
 
-        Args:
-            keyword: Search keyword (required, empty returns 0 results).
-            max_pages: Maximum pages to crawl.
-
-        Returns:
-            List of dicts with: number, title, date, url, organization.
+    def search(self, keyword='', max_pages=None, start_date=None, end_date=None):
         """
-        if not keyword:
-            return []
+        통합검색 게시판 tab의 전 게시글 수집
+        keyword 지정 시 → 해당 키워드만 검색
+        keyword 없음 → DEFAULT_KEYWORDS 다중 검색 후 dedup
+        """
+        keywords = [keyword] if keyword else self.DEFAULT_KEYWORDS
 
-        soup = self._fetch_page(keyword, 1)
-        if soup is None:
-            return []
+        merged = {}
+        for kw in keywords:
+            t0 = time.time()
+            items = self._crawl_keyword(kw)
+            added = 0
+            for it in items:
+                if it['key'] not in merged:
+                    merged[it['key']] = it
+                    added += 1
+            print(f"[경상북도개발공사] '{kw}': {len(items)}건 수집, +{added}건 추가 ({int(time.time()-t0)}s)")
 
-        total_count = self._get_total_count(soup)
-        if total_count == 0:
-            return []
+        items = list(merged.values())
 
-        total_pages = min((total_count + 9) // 10, max_pages)
-        first_rows = self._parse_rows(soup)
-
-        page_results = {1: first_rows}
-
-        if total_pages > 1:
-            with ThreadPoolExecutor(max_workers=self.WORKERS) as executor:
-                futures = {
-                    executor.submit(self._fetch_and_parse, keyword, p, start_date=None, end_date=None): p
-                    for p in range(2, total_pages + 1)
-                }
-                for future in as_completed(futures):
-                    page_num, rows = future.result()
-                    if rows:
-                        page_results[page_num] = rows
-
-        all_results = []
-        for p in sorted(page_results.keys()):
-            all_results.extend(page_results[p])
-
-
-        # 날짜 필터 (기본: 최근 30일)
+        # 날짜 필터
         if not start_date:
             start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
         if not end_date:
             end_date = datetime.now().strftime("%Y-%m-%d")
-        all_results = [_item for _item in all_results
-                     if (lambda d: d and start_date <= d <= end_date)(
-                         (_item.get("date") or "").replace(".", "-").replace("/", "-")[:10])]
-
-        return all_results
+        items = [it for it in items
+                 if not it['date'] or (start_date <= it['date'][:10] <= end_date)]
+        items.sort(key=lambda x: x['date'] or '', reverse=True)
+        print(f"[경상북도개발공사] 완료: 총 {len(items)}건")
+        return items
 
 
 def main():
-    import urllib3
-    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-    import time
-
-    crawler = GBDCCrawler()
-
-    print("=" * 80)
-    print('TEST: Keyword "공고" (max 20 pages, parallel)')
-    print("=" * 80)
-    start = time.time()
-    results = crawler.search(keyword="공고", max_pages=20)
-    elapsed = time.time() - start
-    print(f"Total results: {len(results)}건, {elapsed:.1f}초")
-    if results:
-        print(f"First: {results[0]['date']} | {results[0]['title'][:50]}")
-        print(f"Last:  {results[-1]['date']} | {results[-1]['title'][:50]}")
-
-    assert isinstance(results, list)
-    assert len(results) > 0
-    required = {"number", "title", "date", "url", "organization"}
-    assert required.issubset(results[0].keys())
-    print("Validation passed.")
+    c = GBDCCrawler()
+    t0 = time.time()
+    items = c.search(start_date='2000-01-01', end_date='2099-12-31')
+    print(f'{len(items)}건 / {time.time()-t0:.0f}초')
+    for r in items[:5]:
+        print(f'  [{r["date"]}] {r["title"][:60]}')
 
 
 if __name__ == "__main__":

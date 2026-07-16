@@ -96,6 +96,7 @@ class GMDCCrawler:
 
         all_results = []
 
+        seen_numbers = set()
         for page in range(1, max_pages + 1):
             html = self._fetch_page(keyword, search_field, page)
             if not html:
@@ -105,11 +106,13 @@ class GMDCCrawler:
             if not page_results:
                 break
 
-            all_results.extend(page_results)
-
-            # 페이지당 15건 미만이면 마지막 페이지
-            if len(page_results) < 15:
-                break
+            # 같은 페이지 반복 감지 (게시물 번호 중복)
+            new_results = [r for r in page_results if r.get('number') not in seen_numbers]
+            if not new_results:
+                break  # 모든 게시물이 이미 본 것 → 끝
+            for r in new_results:
+                seen_numbers.add(r.get('number'))
+            all_results.extend(new_results)
 
         print(f"[완료] 총 {len(all_results)}건")
 

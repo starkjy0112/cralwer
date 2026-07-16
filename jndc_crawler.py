@@ -1,332 +1,367 @@
+# -*- coding: utf-8 -*-
 """
-Crawler for 전남개발공사 (Jeonnam Development Corporation) 통합검색 > 게시판
-Target URL: https://www.jndc.co.kr/cf/search.do
+전남개발공사 (jndc) - 게시판 순회 방식 크롤러 (v2 재작성)
 
-Search mechanism:
-- Main search form POSTs to /cf/search.do with parameters:
-    searchKeyword, pageIndex, detail, orderCondition
-- Board search results are loaded via AJAX at /cf/search/board/dataAjax.do
-- Title-only search uses detail=detail&orderCondition=title
-- Each result page shows 5 items
-- Dates and writer info are only available on detail pages
-- Board number is extracted from the URL pattern /cf/Board/{number}/detailView.do
+기존 통합검색 방식(검색어 31개)이 사이트 봇 방어에 걸려서 게시판 직접 순회로 변경.
+
+수집 대상 (총 3 그룹):
+  1) 공고/자료 게시판 8개 (기존)
+     parcelout, breakdown, tenderfree, reward, sale, jobs, etc, mediareport
+  2) 사업내역 게시판 6개 (신규)
+     bdctydevlop, bdbldinddevlop, bdirsttdevlop, bdsundevlop, bdwinddevlop, bsnsdtls
+     - HTML 구조 다름 (grid/card 형태), 상세페이지에서 title 추출
+  3) 사업안내 컨텐츠 페이지 13개 (신규, 정적)
+     M03010101 ~ M030501, title/url만 인덱스
+
+URL 형식:
+  리스트: /web/main/bbs/{key}?cp={page}&sortOrder=REG_DT&sortDirection=DESC&bbsId={key}
+          &pstNtcYn=false&baOpenDay=false&pstRlsYn=true&delYn=false
+  상세:   /web/main/bbs/{key}/{postId}
+  정적:   /web/main/contents/{code}
+
+Rate limit:
+  - WORKERS=2 (매우 보수적)
+  - REQUEST_INTERVAL=1.0s
+  - 사이트 봇 방어 회피 위해 절대 초과 금지
 """
-
 import re
-from datetime import datetime, timedelta
-import logging
+import time
+import threading
 import requests
 from requests.adapters import HTTPAdapter
-from typing import Optional
-from html import unescape
+from bs4 import BeautifulSoup
+from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-)
-logger = logging.getLogger(__name__)
-
-BASE_URL = "https://www.jndc.co.kr"
-BOARD_AJAX_URL = f"{BASE_URL}/cf/search/board/dataAjax.do"
-
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/120.0.0.0 Safari/537.36"
-    ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-    "Accept-Encoding": "gzip, deflate, br",
-    "Connection": "keep-alive",
-}
-
-
-def _strip_html(text: str) -> str:
-    """Remove HTML tags and clean whitespace from a string."""
-    text = re.sub(r"<[^>]+>", "", text)
-    text = unescape(text)
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
 
 
 class JNDCCrawler:
-    """
-    Crawler for 전남개발공사 통합검색 > 게시판 section.
+    """전남개발공사 게시판 순회 크롤러."""
 
-    Uses the AJAX endpoint /cf/search/board/dataAjax.do for paginated
-    board search results and fetches individual detail pages for date
-    and organization information.
-    """
+    BASE_URL = "https://www.jndc.co.kr"
 
-    WORKERS = 10
+    # 공고/자료 게시판 (8개)
+    NOTICE_BOARDS = [
+        ("parcelout", "분양공고"),
+        ("breakdown", "입찰공고"),
+        ("tenderfree", "입찰자료실"),
+        ("reward", "보상공고"),
+        ("sale", "매각공고"),
+        ("jobs", "채용공고"),
+        ("etc", "기타공고"),
+        ("mediareport", "언론보도"),
+    ]
 
-    def __init__(self, timeout: int = 30):
-        """
-        Args:
-            timeout: Request timeout in seconds.
-        """
-        self.timeout = timeout
+    # 사업내역 게시판 (6개, 그리드 카드형)
+    PROJECT_BOARDS = [
+        ("bdctydevlop", "택지개발"),
+        ("bdbldinddevlop", "관광단지"),
+        ("bdirsttdevlop", "산단조성"),
+        ("bdsundevlop", "태양광발전"),
+        ("bdwinddevlop", "풍력발전"),
+        ("bsnsdtls", "운영사업"),
+    ]
+
+    # 사업안내 정적 페이지 (13개)
+    ANNAE_CONTENTS = [
+        ("M03010101", "사업안내"),
+        ("M03010102", "관광단지"),
+        ("M03010103", "산단조성"),
+        ("M03010201", "도시개발"),
+        ("M03010202", "택지개발"),
+        ("M03010203", "산단조성"),
+        ("M03020101", "신재생에너지"),
+        ("M03020102", "풍력발전"),
+        ("M03020103", "사회공헌 실현"),
+        ("M030301", "운영사업"),
+        ("M03040101", "주택사업"),
+        ("M03040102", "분양주택"),
+        ("M030501", "수탁사업"),
+    ]
+
+    # 게시판별 마지막 페이지 (2026-07-10 이진탐색 확인)
+    NOTICE_LAST_PAGE = {
+        "parcelout": 25,        # 실제 23 + 여유
+        "breakdown": 100,       # 실제 97 + 여유
+        "tenderfree": 3,        # 실제 1 + 여유
+        "reward": 60,           # 실제 57 (페이지 6~57은 1건씩) + 여유
+        "sale": 15,             # 실제 7 + 여유
+        "jobs": 40,             # 실제 35 + 여유
+        "etc": 30,              # 실제 22 + 여유
+        "mediareport": 1650,    # 실제 1599 + 여유
+    }
+
+    WORKERS = 4               # 봇 방어 회피용 낮게
+    MAX_PAGES = 1700          # mediareport 커버 위해
+    MAX_RETRIES = 3
+    REQUEST_INTERVAL = 0.4    # 요청 사이 최소 대기 (초, thread 간 공유)
+
+    _DATE_RE = re.compile(r"(20\d{2})[-./](\d{1,2})[-./](\d{1,2})")
+
+    def __init__(self):
         self.session = requests.Session()
-        self.session.headers.update(HEADERS)
+        self.session.headers.update({
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/131.0.0.0 Safari/537.36"
+            ),
+            "Accept-Language": "ko-KR,ko;q=0.9",
+            "Accept": "text/html,application/xhtml+xml",
+        })
+        adapter = HTTPAdapter(pool_connections=8, pool_maxsize=16)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
+        self.session.verify = False
+        self._last_request = 0.0
+        self._interval_lock = threading.Lock()
 
-    def _fetch_board_page(
-        self, keyword: str, page: int, title_only: bool = True
-    ) -> str:
-        """Fetch one page of board search results via AJAX.
+    # ------------------------------------------------------------------ HTTP
+    def _fetch(self, url):
+        """thread-safe GET. 모든 스레드가 REQUEST_INTERVAL 간격 공유."""
+        # thread 간 요청 인터벌 강제 (lock으로)
+        with self._interval_lock:
+            wait = self.REQUEST_INTERVAL - (time.time() - self._last_request)
+            if wait > 0:
+                time.sleep(wait)
+            self._last_request = time.time()
 
-        Args:
-            keyword: Search keyword.
-            page: 1-based page index.
-            title_only: If True, search by title only (제목).
+        for attempt in range(self.MAX_RETRIES):
+            try:
+                r = self.session.get(url, timeout=25)
+                if r.status_code != 200:
+                    raise RuntimeError(f"HTTP {r.status_code}")
+                if len(r.text) < 1500:
+                    raise RuntimeError(f"짧은 응답({len(r.text)}) - 봇 방어 의심")
+                r.encoding = "utf-8"
+                return BeautifulSoup(r.text, "lxml")
+            except Exception:
+                if attempt < self.MAX_RETRIES - 1:
+                    time.sleep(2.0 * (attempt + 1))  # 백오프
+        return None
 
-        Returns:
-            HTML fragment containing the result list items.
-        """
-        data = {
-            "searchKeyword": keyword,
-            "pageIndex": str(page),
+    @staticmethod
+    def _normalize_date(text):
+        if not text:
+            return ""
+        m = JNDCCrawler._DATE_RE.search(text)
+        if not m:
+            return ""
+        y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        if 2000 <= y <= 2100 and 1 <= mo <= 12 and 1 <= d <= 31:
+            return f"{y:04d}-{mo:02d}-{d:02d}"
+        return ""
+
+    # ---------------------------------------------- 공고 게시판 (tbody tr)
+    def _list_url(self, key, page):
+        return (
+            f"{self.BASE_URL}/web/main/bbs/{key}"
+            f"?cp={page}&sortOrder=REG_DT&sortDirection=DESC&bbsId={key}"
+            f"&pstNtcYn=false&baOpenDay=false&pstRlsYn=true&delYn=false"
+        )
+
+    def _parse_notice_page(self, soup, key, name):
+        """공고 게시판 페이지 파싱 (tbody tr 형태)."""
+        results = []
+        if not soup:
+            return results
+        seen_ids = set()
+        for tr in soup.select("tbody tr"):
+            a = tr.select_one("a[href]")
+            if not a:
+                continue
+            href = a.get("href", "")
+            m = re.search(rf"/web/main/bbs/{key}/(\d+)", href)
+            if not m:
+                continue
+            post_id = m.group(1)
+            if post_id in seen_ids:
+                continue
+            seen_ids.add(post_id)
+            title = a.get_text(" ", strip=True)
+            title = re.sub(r"^새글\s*", "", title).strip()
+            if not title or len(title) < 2:
+                continue
+            # 날짜 셀
+            date = ""
+            for td in tr.find_all("td"):
+                d = self._normalize_date(td.get_text(strip=True))
+                if d:
+                    date = d
+                    break
+            results.append({
+                "title": title,
+                "date": date,
+                "url": f"{self.BASE_URL}/web/main/bbs/{key}/{post_id}",
+                "organization": name,
+                "number": post_id,
+            })
+        return results
+
+    def _crawl_notice_board(self, key, name):
+        """공고 게시판 한 개 전체 순회. 사전 확인된 마지막 페이지까지."""
+        results = {}
+        empty_streak = 0
+        last_page = self.NOTICE_LAST_PAGE.get(key, self.MAX_PAGES)
+        for page in range(1, last_page + 1):
+            soup = self._fetch(self._list_url(key, page))
+            items = self._parse_notice_page(soup, key, name)
+            if not items:
+                empty_streak += 1
+                if empty_streak >= 3:  # 3연속 빈 페이지면 조기 종료
+                    break
+                continue
+            empty_streak = 0
+            for it in items:
+                if it["url"] not in results:
+                    results[it["url"]] = it
+        return list(results.values())
+
+    # ----------------------------------------- 사업내역 게시판 (grid card)
+    def _crawl_project_board(self, key, name):
+        """사업내역 게시판 - 리스트에서 링크만 추출, 상세는 title 위해 방문."""
+        results = []
+        url = f"{self.BASE_URL}/web/main/bbs/{key}"
+        soup = self._fetch(url)
+        if not soup:
+            return results
+
+        # 리스트 페이지에서 상세 링크 추출
+        post_ids = []
+        seen = set()
+        for a in soup.select("a[href]"):
+            href = a.get("href", "")
+            m = re.search(rf"/web/main/bbs/{key}/(\d+)", href)
+            if m and m.group(1) not in seen:
+                seen.add(m.group(1))
+                post_ids.append(m.group(1))
+
+        # 상세 페이지 방문해서 title 추출
+        for post_id in post_ids:
+            detail_url = f"{self.BASE_URL}/web/main/bbs/{key}/{post_id}"
+            det_soup = self._fetch(detail_url)
+            if not det_soup:
+                continue
+            # div.sub-viewpage-title 에서 제목 추출
+            title_el = det_soup.select_one("div.sub-viewpage-title")
+            if title_el:
+                title = title_el.get_text(" ", strip=True)
+            else:
+                title = f"{name} #{post_id}"
+            # 상태 어미(진행/완료) 분리 정리
+            title = title.strip()
+            if not title:
+                continue
+            results.append({
+                "title": title,
+                "date": "",   # 사업내역엔 날짜 없음
+                "url": detail_url,
+                "organization": f"사업내역/{name}",
+                "number": post_id,
+            })
+        return results
+
+    # ----------------------------------------- 사업안내 컨텐츠 (정적)
+    def _crawl_annae_content(self, code, label):
+        """정적 컨텐츠 페이지 하나 인덱스."""
+        url = f"{self.BASE_URL}/web/main/contents/{code}"
+        soup = self._fetch(url)
+        if not soup:
+            return None
+        # 제목 (h4 h4-tit 또는 sub-title 근처)
+        title = ""
+        for sel in [".sub-viewpage-title", "h4.h4-tit", "h4", "h3.sub-title"]:
+            el = soup.select_one(sel)
+            if el:
+                t = el.get_text(" ", strip=True)
+                if t and t != "사업안내" and len(t) > 2:
+                    title = t
+                    break
+        if not title:
+            title = f"사업안내 - {label}"
+        return {
+            "title": title,
+            "date": "",
+            "url": url,
+            "organization": f"사업안내/{label}",
+            "number": code,
         }
-        if title_only:
-            data["detail"] = "detail"
-            data["orderCondition"] = "title"
-        else:
-            data["detail"] = ""
 
-        headers = {
-            "Content-Type": "application/x-www-form-urlencoded",
-            "X-Requested-With": "XMLHttpRequest",
-            "Referer": f"{BASE_URL}/cf/search.do",
-        }
-        resp = self.session.post(
-            BOARD_AJAX_URL,
-            data=data,
-            headers=headers,
-            timeout=self.timeout,
-        )
-        resp.raise_for_status()
-        return resp.text
+    # ================================================================ Public
+    def search(self, keyword="", max_pages=999, start_date=None, end_date=None):
+        t0 = time.time()
+        all_results = []
 
-    def _parse_board_items(self, html: str) -> list[dict]:
-        """Parse board search result items from an AJAX response HTML fragment.
-
-        Each <li> contains:
-          - <a href="/cf/Board/{id}/detailView.do" title="..."> for the link and title
-          - <p> with a text snippet (no structured date/org in list view)
-
-        Returns:
-            A list of dicts with keys: title, url, number (board id).
-        """
-        items: list[dict] = []
-        # Match each <li> block containing a board link
-        li_pattern = re.compile(
-            r'<li>\s*<a\s+href="(/cf/Board/(\d+)/detailView\.do)"'
-            r'[^>]*title="([^"]*)"[^>]*class="subject"[^>]*>'
-            r'(.*?)</a>',
-            re.DOTALL,
-        )
-        for match in li_pattern.finditer(html):
-            path = match.group(1)
-            board_id = match.group(2)
-            title_attr = unescape(match.group(3)).strip()
-            url = BASE_URL + path
-
-            items.append(
-                {
-                    "title": title_attr,
-                    "url": url,
-                    "number": int(board_id),
-                }
-            )
-        return items
-
-    def _get_last_page(self, html: str) -> int:
-        """Extract the last page number from the pagination HTML.
-
-        The pagination contains links like:
-            onclick="pf_linkpage_board(320);return false;"
-        The last page link has class="last".
-        """
-        last_match = re.search(
-            r'class="last"\s+onclick="pf_linkpage_board\((\d+)\)', html
-        )
-        if last_match:
-            return int(last_match.group(1))
-        # Fallback: find the highest page number referenced
-        pages = re.findall(r"pf_linkpage_board\((\d+)\)", html)
-        if pages:
-            return max(int(p) for p in pages)
-        return 1
-
-    def _fetch_detail(self, url: str) -> dict:
-        """Fetch a detail page and extract date and organization info.
-
-        Args:
-            url: Full URL to the board detail page.
-
-        Returns:
-            A dict with 'date' and 'organization' keys.
-        """
-        result = {"date": "", "organization": ""}
-        try:
-            resp = self.session.get(url, timeout=self.timeout)
-            resp.raise_for_status()
-            html = resp.text
-
-            # Extract date from: <span class="date">등록일 : 2026-02-20 </span>
-            date_match = re.search(
-                r'<span\s+class="date">[^:]*:\s*([\d]{4}-[\d]{2}-[\d]{2})',
-                html,
-            )
-            if date_match:
-                result["date"] = date_match.group(1).strip()
-
-            # Extract organization/writer from: <span class="writer">작성자 : 곽수현</span>
-            writer_match = re.search(
-                r'<span\s+class="writer">[^:]*:\s*([^<]+)', html
-            )
-            if writer_match:
-                result["organization"] = writer_match.group(1).strip()
-
-        except requests.RequestException as e:
-            logger.warning("Failed to fetch detail page %s: %s", url, e)
-
-        return result
-
-    def _fetch_and_parse_page(self, keyword: str, page: int) -> list[dict]:
-        """Fetch and parse a single board search page."""
-        try:
-            html = self._fetch_board_page(keyword, page, title_only=True)
-        except requests.RequestException as e:
-            logger.error("Failed to fetch page %d: %s", page, e)
-            return []
-        return self._parse_board_items(html)
-
-    def search(self, keyword: str = "", max_pages: int = 10, start_date=None, end_date=None) -> list[dict]:
-        """Search the 게시판 (board) section of the unified search.
-
-        Searches by title only (제목) when a keyword is provided.
-
-        Args:
-            keyword: Search keyword. The site requires a non-empty keyword.
-            max_pages: Maximum number of result pages to fetch.
-
-        Returns:
-            A list of dicts, each containing:
-                - title (str, start_date=None, end_date=None): Post title.
-                - date (str): Registration date (YYYY-MM-DD).
-                - url (str): Full URL to the detail page.
-                - organization (str): Writer/author name if available.
-                - number (int): Board post ID number.
-        """
-        if not keyword:
-            logger.warning(
-                "Empty keyword provided. The site requires a search keyword."
-            )
-            return []
-
-        # Fetch page 1 to determine total pages
-        logger.info("Fetching board search page 1 for keyword '%s'...", keyword)
-        try:
-            first_html = self._fetch_board_page(keyword, 1, title_only=True)
-        except requests.RequestException as e:
-            logger.error("Failed to fetch page 1: %s", e)
-            return []
-
-        first_items = self._parse_board_items(first_html)
-        if not first_items:
-            return []
-
-        last_page = self._get_last_page(first_html)
-        actual_pages = min(last_page, max_pages)
-        logger.info("Total pages available: %d (fetching %d)", last_page, actual_pages)
-
-        if actual_pages <= 1:
-            all_items = first_items
-        else:
-            # Parallel fetch remaining pages
-            page_results = {1: first_items}
-            with ThreadPoolExecutor(max_workers=self.WORKERS) as executor:
-                futures = {
-                    executor.submit(self._fetch_and_parse_page, keyword, p): p
-                    for p in range(2, actual_pages + 1)
-                }
-                for future in as_completed(futures):
-                    p = futures[future]
-                    try:
-                        items = future.result()
-                        if items:
-                            page_results[p] = items
-                    except Exception:
-                        pass
-
-            all_items = []
-            for p in sorted(page_results.keys()):
-                all_items.extend(page_results[p])
-
-        # Parallel fetch detail pages to get date and organization
-        logger.info("Fetching detail pages for %d items...", len(all_items))
-        with ThreadPoolExecutor(max_workers=self.WORKERS) as executor:
-            futures = {
-                executor.submit(self._fetch_detail, item["url"]): i
-                for i, item in enumerate(all_items)
-            }
-            done = 0
-            for future in as_completed(futures):
-                idx = futures[future]
+        # 1) 공고 게시판 8개 (병렬 WORKERS=2)
+        print(f"[전남개발공사] 공고 게시판 {len(self.NOTICE_BOARDS)}개 시작...", flush=True)
+        with ThreadPoolExecutor(max_workers=self.WORKERS) as pool:
+            futs = {pool.submit(self._crawl_notice_board, k, n): (k, n)
+                    for k, n in self.NOTICE_BOARDS}
+            for f in as_completed(futs):
+                k, n = futs[f]
                 try:
-                    detail = future.result()
-                    all_items[idx]["date"] = detail["date"]
-                    all_items[idx]["organization"] = detail["organization"]
-                except Exception:
-                    pass
-                done += 1
-                if done % 20 == 0:
-                    logger.info("  Detail progress: %d/%d", done, len(all_items))
+                    items = f.result()
+                    all_results.extend(items)
+                    print(f"  [{n}] {len(items)}건", flush=True)
+                except Exception as e:
+                    print(f"  [{n}] 실패: {e}", flush=True)
 
+        # 2) 사업내역 게시판 6개 (병렬 WORKERS=2)
+        print(f"[전남개발공사] 사업내역 게시판 {len(self.PROJECT_BOARDS)}개 시작...", flush=True)
+        with ThreadPoolExecutor(max_workers=self.WORKERS) as pool:
+            futs = {pool.submit(self._crawl_project_board, k, n): (k, n)
+                    for k, n in self.PROJECT_BOARDS}
+            for f in as_completed(futs):
+                k, n = futs[f]
+                try:
+                    items = f.result()
+                    all_results.extend(items)
+                    print(f"  [사업내역/{n}] {len(items)}건", flush=True)
+                except Exception as e:
+                    print(f"  [사업내역/{n}] 실패: {e}", flush=True)
 
-        # 날짜 필터 (기본: 최근 30일)
+        # 3) 사업안내 컨텐츠 13개 (순차, 정적 페이지)
+        print(f"[전남개발공사] 사업안내 컨텐츠 {len(self.ANNAE_CONTENTS)}개 시작...",
+              flush=True)
+        for code, label in self.ANNAE_CONTENTS:
+            item = self._crawl_annae_content(code, label)
+            if item:
+                all_results.append(item)
+        print(f"  [사업안내] {len(self.ANNAE_CONTENTS)}건", flush=True)
+
+        # dedup by URL
+        seen = set()
+        deduped = []
+        for it in all_results:
+            if it["url"] in seen:
+                continue
+            seen.add(it["url"])
+            deduped.append(it)
+
+        # 날짜 필터 (날짜 없는 항목은 통과)
         if not start_date:
             start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
         if not end_date:
             end_date = datetime.now().strftime("%Y-%m-%d")
-        all_items = [_item for _item in all_items
-                     if (lambda d: d and start_date <= d <= end_date)(
-                         (_item.get("date") or "").replace(".", "-").replace("/", "-")[:10])]
+        filtered = [
+            it for it in deduped
+            if not it["date"] or (start_date <= it["date"][:10] <= end_date)
+        ]
+        filtered.sort(key=lambda x: x["date"] or "", reverse=True)
 
-        return all_items
+        elapsed = int(time.time() - t0)
+        print(f"[전남개발공사] 완료: 총 {len(filtered)}건 / {elapsed}s", flush=True)
+        return filtered
 
 
 def main():
-    crawler = JNDCCrawler(timeout=30)
-
-    keyword = "공고"
-    max_pages = 2  # Fetch first 2 pages for testing (10 items)
-    print(f"Searching for keyword: '{keyword}' (max {max_pages} pages)")
-    print("=" * 80)
-
-    results = crawler.search(keyword=keyword, max_pages=max_pages)
-
-    print(f"\nTotal results fetched: {len(results)}")
-    print("=" * 80)
-
-    for i, item in enumerate(results, start=1):
-        print(f"\n[{i}]")
-        print(f"  Number : {item['number']}")
-        print(f"  Title  : {item['title']}")
-        print(f"  Date   : {item['date']}")
-        print(f"  Org    : {item['organization']}")
-        print(f"  URL    : {item['url']}")
-
-    # Verify return type
-    print("\n" + "=" * 80)
-    print(f"Return type: {type(results).__name__}")
-    if results:
-        print(f"Item type  : {type(results[0]).__name__}")
-        print(f"Item keys  : {list(results[0].keys())}")
-
-    return results
+    import urllib3
+    urllib3.disable_warnings()
+    c = JNDCCrawler()
+    items = c.search(start_date="2000-01-01", end_date="2099-12-31")
+    print(f"\n총 {len(items)}건")
+    from collections import Counter
+    for k, v in Counter(it["organization"] for it in items).most_common():
+        print(f"  {k}: {v}")
 
 
 if __name__ == "__main__":

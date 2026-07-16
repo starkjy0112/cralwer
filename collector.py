@@ -41,10 +41,19 @@ def get_max_pages(crawler_id):
 
 
 def collect_one(crawler_id, info, days=30):
-    """단일 크롤러 실행"""
+    """단일 크롤러 실행.
+    통합: crawler_config로 링크 상태 자동 기록 + 크롤 실패 시 폴백 URL 안내.
+    """
+    from crawler_config import get_crawler_url, record_link_check
+
     crawler = info["instance"]
     name = info["name"]
     ctype = info.get("type", "")
+
+    # DB에 등록된 URL 정보
+    url_info = get_crawler_url(crawler_id)
+    primary_url = url_info[0] if url_info else None
+    fallback_url = url_info[1] if url_info else None
 
     try:
         end_date = datetime.now().strftime("%Y-%m-%d")
@@ -60,11 +69,20 @@ def collect_one(crawler_id, info, days=30):
 
         new_count = db.save_items(crawler_id, name, ctype, items)
         db.update_crawler_status(crawler_id, name, len(items))
+        # 크롤 성공 → 링크 정상
+        if primary_url:
+            record_link_check(crawler_id, primary_url, ok=True, http_status=200)
         return crawler_id, name, len(items), new_count, None
 
     except Exception as e:
         err = str(e)[:200]
         db.update_crawler_status(crawler_id, name, 0, error=err)
+        # 크롤 실패 → 링크 상태 기록 (관리자 페이지 탭 ③에서 자동 표시됨)
+        if primary_url:
+            record_link_check(crawler_id, primary_url, ok=False, error=err)
+        # 폴백 URL 있으면 로그에 알림
+        if fallback_url:
+            err = f"{err} [폴백가능: {fallback_url}]"
         return crawler_id, name, 0, 0, err
 
 

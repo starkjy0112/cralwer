@@ -1,153 +1,147 @@
 # -*- coding: utf-8 -*-
 """
-남양주도시공사 공유재산입찰 크롤러
-https://www.ncuc.or.kr/main/35
-GET 기반, page_size=20
+남양주도시공사 (ncuc) - xlsx 43행
+/main/{N} 다게시판 합산.
 """
-import math
 import re
-from datetime import datetime, timedelta
+import time
 import requests
 from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
-from concurrent.futures import ThreadPoolExecutor, as_completed
-
-
-BASE_URL = "https://www.ncuc.or.kr"
-BOARD_PATH = "/main/35"
-PAGE_SIZE = 100
+from datetime import datetime, timedelta
 
 
 class NCUCCrawler:
-    """남양주도시공사 공유재산입찰 크롤러"""
+    """남양주도시공사 다게시판 통합 크롤러."""
+
+    BASE_URL = "https://www.ncuc.or.kr"
+
+    # (main_code, 표시명) - page=N에 실제 반응하는 리스트 페이지만
+    BOARDS = [
+        (35, '공유재산입찰'),
+    ]
+
+    MAX_RETRIES = 5
+    PAGE_DELAY = 0.3
 
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update({
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
-            ),
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                          "AppleWebKit/537.36 (KHTML, like Gecko) "
+                          "Chrome/131.0.0.0 Safari/537.36",
+            "Accept-Language": "ko-KR,ko;q=0.9",
         })
         adapter = HTTPAdapter(pool_connections=1, pool_maxsize=20)
         self.session.mount("https://", adapter)
-        self.session.mount("http://", adapter)
+        self.session.verify = False
 
-    def _fetch_page(self, keyword, page):
-        """게시판 목록 한 페이지를 가져옵니다."""
-        params = {
-            "page": page,
-            "page_size": PAGE_SIZE,
-            "search_field": "Ti",
-            "search_word": keyword,
-        }
-        resp = self.session.get(
-            f"{BASE_URL}{BOARD_PATH}",
-            params=params,
-            timeout=15,
-        )
-        resp.encoding = "utf-8"
-        soup = BeautifulSoup(resp.text, "lxml")
+    def _fetch(self, code, page):
+        url = f"{self.BASE_URL}/main/{code}?page={page}"
+        for attempt in range(self.MAX_RETRIES):
+            try:
+                r = self.session.get(url, timeout=30)
+                r.raise_for_status()
+                r.encoding = 'utf-8'
+                return BeautifulSoup(r.text, 'lxml')
+            except Exception:
+                if attempt < self.MAX_RETRIES - 1:
+                    time.sleep(1.5 * (attempt + 1))
+        return None
 
-        # 게시글 파싱
-        items = []
-        table = soup.select_one("table")
-        if not table:
-            return items, 1
-
-        rows = table.select("tr")[1:]  # 헤더 제외
-
-        # 첫 번째 일반 게시글(공지 제외) 번호로 총 페이지 수 계산
-        total_pages = 1
-        for row in rows:
-            cells = row.select("td")
-            if len(cells) >= 1:
-                num = cells[0].get_text(strip=True)
-                if num.isdigit():
-                    total_pages = max(1, math.ceil(int(num) / PAGE_SIZE))
+    def _parse_rows(self, soup, board_name, code):
+        results = []
+        if not soup:
+            return results
+        for tr in soup.select('tbody tr'):
+            tds = tr.find_all('td')
+            if len(tds) < 2:
+                continue
+            a = tr.select_one('a[href*="action-value"]')
+            if not a:
+                continue
+            href = a.get('href', '') or ''
+            m = re.search(r'action-value=([a-f0-9]+)', href)
+            if not m:
+                continue
+            hash_id = m.group(1)
+            url = f"{self.BASE_URL}/main/{code}?action=read&action-value={hash_id}"
+            title = a.get_text(' ', strip=True)
+            title = re.sub(r'\s+', ' ', title).strip()
+            if not title or len(title) < 2:
+                continue
+            date = ''
+            for td in tds:
+                t = td.get_text(' ', strip=True)
+                m2 = re.search(r'(\d{4})[-./](\d{1,2})[-./](\d{1,2})', t)
+                if m2:
+                    date = f"{m2.group(1)}-{m2.group(2).zfill(2)}-{m2.group(3).zfill(2)}"
                     break
-        for row in rows:
-            cells = row.select("td")
-            if len(cells) < 5:
-                continue
-
-            number = cells[0].get_text(strip=True)
-            title_cell = cells[1]
-            department = cells[3].get_text(strip=True)
-            date = cells[4].get_text(strip=True)
-
-            link = title_cell.select_one("a")
-            if not link:
-                continue
-
-            title = link.get_text(strip=True)
-            href = link.get("href", "")
-            detail_url = f"{BASE_URL}{BOARD_PATH}{href}" if href.startswith("?") else href
-
-            items.append({
-                "number": number,
-                "title": title,
-                "date": date,
-                "url": detail_url,
-                "organization": department,
+            results.append({
+                'title': title, 'date': date, 'url': url,
+                'organization': board_name, 'number': hash_id[:8],
             })
+        return results
 
-        return items, total_pages
+    def _crawl_board(self, board_tuple):
+        code, board_name = board_tuple
+        results = []
+        seen = set()
+        empty_streak = 0
+        for page in range(1, 500):
+            time.sleep(self.PAGE_DELAY if page > 1 else 0)
+            soup = self._fetch(code, page)
+            rows = self._parse_rows(soup, board_name, code)
+            new_cnt = 0
+            for it in rows:
+                if it['url'] not in seen:
+                    seen.add(it['url'])
+                    results.append(it)
+                    new_cnt += 1
+            if not rows or new_cnt == 0:
+                empty_streak += 1
+                if empty_streak >= 2:
+                    break
+            else:
+                empty_streak = 0
+        return results
 
-    WORKERS = 20
+    def search(self, keyword='', max_pages=999, start_date=None, end_date=None):
+        all_results = {}
+        for board in self.BOARDS:
+            try:
+                items = self._crawl_board(board)
+                for r in items:
+                    if r['url'] not in all_results:
+                        all_results[r['url']] = r
+                print(f"  [{board[1]}] {len(items)}건", flush=True)
+            except Exception as e:
+                print(f"  [{board[1]}] 에러: {str(e)[:60]}", flush=True)
+            time.sleep(0.5)
 
-    def search(self, keyword="", max_pages=10, start_date=None, end_date=None):
-        """공유재산입찰을 검색합니다."""
-        first_items, total_pages = self._fetch_page(keyword, 1)
-        actual_pages = min(total_pages, max_pages)
-        print(f"  [Page 1/{actual_pages}] {len(first_items)}건 수집")
-
-        if actual_pages <= 1:
-            all_items = first_items
-        else:
-            page_results = {1: first_items}
-            with ThreadPoolExecutor(max_workers=self.WORKERS) as executor:
-                futures = {
-                    executor.submit(self._fetch_page, keyword, p): p
-                    for p in range(2, actual_pages + 1)
-                }
-                for future in as_completed(futures):
-                    p = futures[future]
-                    try:
-                        items, _ = future.result()
-                        if items:
-                            page_results[p] = items
-                    except Exception:
-                        pass
-
-            all_items = []
-            for p in sorted(page_results.keys()):
-                all_items.extend(page_results[p])
-
-        # 날짜 필터 (기본: 최근 30일)
+        items = list(all_results.values())
         if not start_date:
             start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
         if not end_date:
             end_date = datetime.now().strftime("%Y-%m-%d")
+        items = [it for it in items
+                 if not it['date'] or (start_date <= it['date'][:10] <= end_date)]
+        items.sort(key=lambda x: x['date'] or '', reverse=True)
+        print(f"[남양주도시공사] 완료: 총 {len(items)}건", flush=True)
+        return items
 
-        all_items = [item for item in all_items
-                     if (lambda d: d and start_date <= d <= end_date)(
-                         (item.get("date") or "").replace(".", "-").replace("/", "-")[:10])]
 
-        all_items.sort(key=lambda x: x["date"], reverse=True)
-        print(f"[남양주도시공사] 완료: 총 {len(all_items)}건")
-        return all_items
+def main():
+    import urllib3
+    urllib3.disable_warnings()
+    c = NCUCCrawler()
+    t0 = time.time()
+    items = c.search(start_date='2000-01-01', end_date='2099-12-31')
+    print(f'{len(items)}건 / {time.time()-t0:.0f}초')
+    from collections import Counter
+    for k, v in Counter(it['organization'] for it in items).most_common():
+        print(f'  {k}: {v}')
 
 
 if __name__ == "__main__":
-    crawler = NCUCCrawler()
-    print("=== 전체 조회 (3페이지) ===")
-    results = crawler.search("", max_pages=3)
-    for r in results[:5]:
-        print(f"  [{r['date']}] {r['title'][:50]} | {r['organization']}")
-
-    print("\n=== '공고' 검색 (3페이지) ===")
-    results2 = crawler.search("공고", max_pages=3)
-    for r in results2[:5]:
-        print(f"  [{r['date']}] {r['title'][:50]} | {r['organization']}")
+    main()

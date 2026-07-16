@@ -1,188 +1,169 @@
 # -*- coding: utf-8 -*-
 """
-통영관광개발공사 입찰정보 크롤러
-http://corp.ttdc.kr/board/board.aspx?tbl=bidding
-
-ASP.NET WebForms 기반 (VIEWSTATE + __doPostBack 방식).
-검색: POST로 ddlSearchCondition + txtSearchWord 전송.
-페이지 이동: __doPostBack('dataPager$ctl01$ctlXX', '') 방식.
+통영관광개발공사 (ttdc) - xlsx 36행
+7개 게시판 합산. startIndex 페이징 (10단위).
 """
 import re
-from datetime import datetime, timedelta
+import time
 import requests
 from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
-
-
-BASE_URL = "http://corp.ttdc.kr"
-BOARD_URL = f"{BASE_URL}/board/board.aspx?tbl=bidding"
+from datetime import datetime, timedelta
 
 
 class TTDCCrawler:
-    """통영관광개발공사 입찰정보 크롤러"""
+    """통영관광개발공사 다게시판 통합 크롤러."""
+
+    BASE_URL = "http://corp.ttdc.kr"
+    LIST_URL = f"{BASE_URL}/board/board.aspx"
+    PAGE_SIZE = 10
+
+    BOARDS = [
+        ('bidding', '입찰정보'),  # xlsx 36행 지정
+    ]
+
+    MAX_RETRIES = 5
+    PAGE_DELAY = 0.3
 
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update({
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
-            ),
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                          "AppleWebKit/537.36 (KHTML, like Gecko) "
+                          "Chrome/131.0.0.0 Safari/537.36",
+            "Accept-Language": "ko-KR,ko;q=0.9",
         })
         adapter = HTTPAdapter(pool_connections=1, pool_maxsize=20)
         self.session.mount("https://", adapter)
         self.session.mount("http://", adapter)
 
-    def _extract_asp_fields(self, soup):
-        """VIEWSTATE 등 ASP.NET hidden 필드 추출"""
-        fields = {}
-        for name in ("__VIEWSTATE", "__VIEWSTATEGENERATOR",
-                      "__VIEWSTATEENCRYPTED", "__EVENTVALIDATION"):
-            tag = soup.find("input", id=name)
-            fields[name] = tag["value"] if tag else ""
-        return fields
-
-    def _parse_page(self, soup):
-        """테이블에서 게시글 파싱"""
-        items = []
-        table = soup.select_one("table")
-        if not table:
-            return items
-
-        for row in table.select("tr")[1:]:
-            cells = row.select("td")
-            if len(cells) < 5:
-                continue
-
-            number = cells[0].get_text(strip=True)
-            link = cells[1].select_one("a")
-            if not link:
-                continue
-
-            title = link.get_text(strip=True)
-            href = link.get("href", "")
-            detail_url = f"{BASE_URL}{href}" if href.startswith("/") else href
-            author = cells[2].get_text(strip=True)
-            date = cells[3].get_text(strip=True)
-
-            items.append({
-                "number": number,
-                "title": title,
-                "date": date,
-                "url": detail_url,
-                "organization": author,
-            })
-
-        return items
-
-    def _get_total_pages(self, soup):
-        """Page : 1 / 17 에서 총 페이지 수 추출"""
-        m = re.search(r"Page\s*:\s*\d+\s*/\s*(\d+)", soup.get_text(), re.DOTALL)
-        return int(m.group(1)) if m else 1
-
-    def _get_pager_targets(self, soup):
-        """페이지네이션 __doPostBack 타겟 목록 추출"""
-        targets = {}
-        for a in soup.find_all("a", href=re.compile(r"__doPostBack")):
-            m = re.search(r"__doPostBack\('([^']+)'", a.get("href", ""))
-            text = a.get_text(strip=True)
-            if m and text.isdigit():
-                targets[int(text)] = m.group(1)
-        return targets
-
-    def search(self, keyword="", max_pages=1000, start_date=None, end_date=None):
-        """입찰정보를 검색합니다."""
-        # 1단계: 초기 페이지 GET
-        resp = self.session.get(BOARD_URL, timeout=15)
-        resp.encoding = "utf-8"
-        soup = BeautifulSoup(resp.text, "lxml")
-        asp_fields = self._extract_asp_fields(soup)
-
-        # 2단계: 검색 POST (키워드가 있으면)
-        if keyword:
-            data = dict(asp_fields)
-            data["ctl00$MainContent$ctl00$ddlSearchCondition"] = "Title"
-            data["ctl00$MainContent$ctl00$txtSearchWord"] = keyword
-            data["ctl00$MainContent$ctl00$btnSearch"] = "검색"
-            resp = self.session.post(BOARD_URL, data=data, timeout=15)
-            resp.encoding = "utf-8"
-            soup = BeautifulSoup(resp.text, "lxml")
-            asp_fields = self._extract_asp_fields(soup)
-
-        # 첫 페이지 파싱
-        total_pages = min(self._get_total_pages(soup), max_pages)
-        all_items = self._parse_page(soup)
-        print(f"  [Page 1/{total_pages}] {len(all_items)}건 수집")
-
-        if total_pages <= 1:
-            print(f"[통영관광개발공사] 완료: 총 {len(all_items)}건")
-            return all_items
-
-        # 3단계: 나머지 페이지 순차 조회 (ASP.NET은 VIEWSTATE가 순차 의존)
-        for page in range(2, total_pages + 1):
-            pager_targets = self._get_pager_targets(soup)
-
-            if page in pager_targets:
-                target = pager_targets[page]
-            else:
-                # "Next" 또는 "..." 링크 찾기
-                next_link = None
-                for a in soup.find_all("a", href=re.compile(r"__doPostBack")):
-                    text = a.get_text(strip=True)
-                    if text in ("Next", "..."):
-                        m = re.search(r"__doPostBack\('([^']+)'", a.get("href", ""))
-                        if m:
-                            next_link = m.group(1)
-                            break
-                if not next_link:
-                    break
-                target = next_link
-
-            data = dict(asp_fields)
-            data["__EVENTTARGET"] = target
-            data["__EVENTARGUMENT"] = ""
-            if keyword:
-                data["ctl00$MainContent$ctl00$ddlSearchCondition"] = "Title"
-                data["ctl00$MainContent$ctl00$txtSearchWord"] = keyword
-
+    def _fetch(self, tbl, start_index):
+        url = f"{self.LIST_URL}?tbl={tbl}&startIndex={start_index}"
+        for attempt in range(self.MAX_RETRIES):
             try:
-                resp = self.session.post(BOARD_URL, data=data, timeout=15)
-                resp.encoding = "utf-8"
-                soup = BeautifulSoup(resp.text, "lxml")
-                asp_fields = self._extract_asp_fields(soup)
+                r = self.session.get(url, timeout=30)
+                r.raise_for_status()
+                return BeautifulSoup(r.text, 'lxml')
+            except Exception:
+                if attempt < self.MAX_RETRIES - 1:
+                    time.sleep(1.5 * (attempt + 1))
+        return None
 
-                items = self._parse_page(soup)
-                if not items:
+    def _get_first_num(self, soup):
+        if not soup:
+            return 0
+        tr = soup.select_one('tbody tr')
+        if not tr:
+            return 0
+        td = tr.find('td')
+        try:
+            return int(td.get_text(strip=True))
+        except Exception:
+            return 0
+
+    def _parse_rows(self, soup, board_name, tbl):
+        results = []
+        if not soup:
+            return results
+        for tr in soup.select('tbody tr'):
+            tds = tr.find_all('td')
+            if len(tds) < 3:
+                continue
+            a = tr.select_one('td.title a, a[href*="mode=view"], a[href*="seq="]')
+            if not a:
+                continue
+            href = a.get('href', '')
+            m = re.search(r'seq=(\d+)', href)
+            if not m:
+                continue
+            seq = m.group(1)
+            url = f"{self.BASE_URL}{href}" if href.startswith('/') else (
+                href if href.startswith('http') else f"{self.LIST_URL}?tbl={tbl}&mode=view&seq={seq}")
+            url = re.sub(r'&startIndex=\d+', '', url)
+            title = a.get_text(' ', strip=True)
+            if not title or len(title) < 2:
+                continue
+            num = tds[0].get_text(strip=True)
+            date = ''
+            for td in tds:
+                t = td.get_text(' ', strip=True)
+                m2 = re.search(r'(\d{4})[-./](\d{1,2})[-./](\d{1,2})', t)
+                if m2:
+                    date = f"{m2.group(1)}-{m2.group(2).zfill(2)}-{m2.group(3).zfill(2)}"
                     break
-                all_items.extend(items)
+            results.append({
+                'title': title, 'date': date, 'url': url,
+                'organization': board_name, 'number': num,
+            })
+        return results
+
+    def _crawl_board(self, board_tuple):
+        tbl, board_name = board_tuple
+        results = []
+        seen = set()
+        first = self._fetch(tbl, 0)
+        if not first:
+            return results
+        for it in self._parse_rows(first, board_name, tbl):
+            if it['url'] not in seen:
+                seen.add(it['url'])
+                results.append(it)
+        # 끝까지 페이지네이션 - 새 항목 0이면 종료 (잘못된 startIndex는 첫 페이지로 reset됨)
+        empty_streak = 0
+        start = self.PAGE_SIZE
+        while start < 20000:  # 안전 상한
+            time.sleep(self.PAGE_DELAY)
+            soup = self._fetch(tbl, start)
+            rows = self._parse_rows(soup, board_name, tbl)
+            new_cnt = 0
+            for it in rows:
+                if it['url'] not in seen:
+                    seen.add(it['url'])
+                    results.append(it)
+                    new_cnt += 1
+            if new_cnt == 0:
+                empty_streak += 1
+                if empty_streak >= 2:
+                    break
+            else:
+                empty_streak = 0
+            start += self.PAGE_SIZE
+        return results
+
+    def search(self, keyword='', max_pages=999, start_date=None, end_date=None):
+        all_results = {}
+        for board in self.BOARDS:
+            try:
+                items = self._crawl_board(board)
+                for r in items:
+                    if r['url'] not in all_results:
+                        all_results[r['url']] = r
+                print(f"  [{board[1]}] {len(items)}건", flush=True)
             except Exception as e:
-                print(f"  [Page {page}] Error: {e}")
-                break
+                print(f"  [{board[1]}] 에러: {str(e)[:60]}", flush=True)
+            time.sleep(0.8)
 
-        all_items.sort(key=lambda x: x["date"], reverse=True)
-        print(f"[통영관광개발공사] 완료: 총 {len(all_items)}건")
-
-        # 날짜 필터 (기본: 최근 30일)
+        items = list(all_results.values())
         if not start_date:
             start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
         if not end_date:
             end_date = datetime.now().strftime("%Y-%m-%d")
-        all_items = [_item for _item in all_items
-                     if (lambda d: d and start_date <= d <= end_date)(
-                         (_item.get("date") or "").replace(".", "-").replace("/", "-")[:10])]
+        items = [it for it in items
+                 if not it['date'] or (start_date <= it['date'][:10] <= end_date)]
+        items.sort(key=lambda x: x['date'] or '', reverse=True)
+        print(f"[통영관광개발공사] 완료: 총 {len(items)}건", flush=True)
+        return items
 
-        return all_items
+
+def main():
+    c = TTDCCrawler()
+    t0 = time.time()
+    items = c.search(start_date='2000-01-01', end_date='2099-12-31')
+    print(f'{len(items)}건 / {time.time()-t0:.0f}초')
+    from collections import Counter
+    for k, v in Counter(it['organization'] for it in items).most_common():
+        print(f'  {k}: {v}')
 
 
 if __name__ == "__main__":
-    crawler = TTDCCrawler()
-    print("=== 전체 조회 ===")
-    results = crawler.search("", max_pages=1000)
-    for r in results[:5]:
-        print(f"  [{r['date']}] {r['title'][:50]} | {r['organization']}")
-
-    print(f"\n=== '공고' 검색 ===")
-    results2 = crawler.search("공고", max_pages=1000)
-    for r in results2[:5]:
-        print(f"  [{r['date']}] {r['title'][:50]} | {r['organization']}")
+    main()

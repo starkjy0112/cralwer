@@ -143,28 +143,48 @@ class AlioItemCrawler:
                 "url": f"https://www.alio.go.kr/item/itemReport.do?seq={disclosure_no}&disclosureNo={disclosure_no}" if disclosure_no else "",
             })
 
-        # 나머지 페이지 (최대 max_pages까지)
+        # 나머지 페이지 (실패 시 재시도 3회, 배치 처리로 동시성 제어)
         pages_to_fetch = min(total_pages, max_pages)
         if pages_to_fetch > 1:
-            tasks = [
-                self._call_api_async(session, headers, apba_id, keyword, page_no)
-                for page_no in range(2, pages_to_fetch + 1)
-            ]
-            responses = await asyncio.gather(*tasks)
+            BATCH_SIZE = 10  # 한번에 10페이지씩
+            MAX_RETRIES = 3
+            page_results = {}  # page_no → items
+            pending = list(range(2, pages_to_fetch + 1))
 
-            for _, _, page_data in responses:
-                if page_data and page_data.get("status") == "success":
-                    items = page_data.get("data", {}).get("result", [])
-                    for item in items:
-                        disclosure_no = item.get("disclosureNo", "")
-                        results.append({
-                            "apba_id": apba_id,
-                            "title": item.get("title", ""),
-                            "date": item.get("idate", ""),
-                            "disclosure_no": disclosure_no,
-                            "bid_type": item.get("bidType", ""),
-                            "url": f"https://www.alio.go.kr/item/itemReport.do?seq={disclosure_no}&disclosureNo={disclosure_no}" if disclosure_no else "",
-                        })
+            for attempt in range(MAX_RETRIES):
+                if not pending:
+                    break
+                failed = []
+                # 배치 단위로 순차 처리 (동시성 제한)
+                for i in range(0, len(pending), BATCH_SIZE):
+                    batch = pending[i:i+BATCH_SIZE]
+                    tasks = [self._call_api_async(session, headers, apba_id, keyword, p) for p in batch]
+                    responses = await asyncio.gather(*tasks, return_exceptions=True)
+                    for resp, p in zip(responses, batch):
+                        if isinstance(resp, Exception):
+                            failed.append(p)
+                            continue
+                        _, _, page_data = resp
+                        if page_data and page_data.get("status") == "success":
+                            page_results[p] = page_data.get("data", {}).get("result", [])
+                        else:
+                            failed.append(p)
+                pending = failed
+                if pending and attempt < MAX_RETRIES - 1:
+                    await asyncio.sleep(2)  # 재시도 전 2초 대기
+
+            # 결과 합치기
+            for p in sorted(page_results.keys()):
+                for item in page_results[p]:
+                    disclosure_no = item.get("disclosureNo", "")
+                    results.append({
+                        "apba_id": apba_id,
+                        "title": item.get("title", ""),
+                        "date": item.get("idate", ""),
+                        "disclosure_no": disclosure_no,
+                        "bid_type": item.get("bidType", ""),
+                        "url": f"https://www.alio.go.kr/item/itemReport.do?seq={disclosure_no}&disclosureNo={disclosure_no}" if disclosure_no else "",
+                    })
 
         return results
 

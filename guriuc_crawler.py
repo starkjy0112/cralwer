@@ -1,195 +1,161 @@
 # -*- coding: utf-8 -*-
 """
-구리도시공사 입찰정보 크롤러
-https://www.guriuc.or.kr/bbsArticle/list.do?bbsId=BID_INFO
-POST 기반, jsessionid 필요
+구리도시공사 (guriuc) - xlsx 41행
+4개 게시판 합산. pageIndex 페이징.
 """
-import math
 import re
-from datetime import datetime, timedelta
+import math
+import time
 import requests
 from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
-from concurrent.futures import ThreadPoolExecutor, as_completed
-
-
-BASE_URL = "https://www.guriuc.or.kr"
-LIST_URL = f"{BASE_URL}/bbsArticle/list.do"
-PAGE_SIZE = 10
+from datetime import datetime, timedelta
 
 
 class GURIUCCrawler:
-    """구리도시공사 입찰정보 크롤러"""
+    """구리도시공사 다게시판 통합 크롤러."""
+
+    BASE_URL = "https://www.guriuc.or.kr"
+    LIST_URL = f"{BASE_URL}/bbsArticle/list.do"
+    VIEW_URL = f"{BASE_URL}/bbsArticle/view.do"
+
+    BOARDS = [
+        ('BID_INFO', '입찰정보'),
+    ]
+
+    MAX_RETRIES = 5
+    PAGE_DELAY = 0.3
+    PAGE_SIZE = 10
 
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update({
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
-            ),
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                          "AppleWebKit/537.36 (KHTML, like Gecko) "
+                          "Chrome/131.0.0.0 Safari/537.36",
+            "Accept-Language": "ko-KR,ko;q=0.9",
         })
         adapter = HTTPAdapter(pool_connections=1, pool_maxsize=20)
         self.session.mount("https://", adapter)
-        self.session.mount("http://", adapter)
         self.session.verify = False
-        self._post_url = LIST_URL
 
-    def _init_session(self):
-        """GET으로 세션 초기화, jsessionid 추출"""
-        resp = self.session.get(LIST_URL, params={"bbsId": "BID_INFO"}, timeout=30)
-        resp.encoding = "utf-8"
-        m = re.search(r'jsessionid=([A-Z0-9.]+)', resp.text)
-        if m:
-            self._post_url = f"{LIST_URL};jsessionid={m.group(1)}"
-
-    def _fetch_page(self, keyword, page):
-        """게시판 목록 한 페이지를 가져옵니다."""
-        resp = self.session.post(
-            self._post_url,
-            data={
-                "pageIndex": str(page),
-                "bbsId": "BID_INFO",
-                "searchType": "all",
-                "searchValue": keyword,
-            },
-            timeout=15,
-        )
-        resp.encoding = "utf-8"
-        soup = BeautifulSoup(resp.text, "lxml")
-
-        # 총 건수 파싱: <p class="total">전체 <span class="em on">161</span>건</p>
-        total_count = 0
-        span = soup.select_one("p.total span.em")
-        if span:
+    def _fetch(self, bbs_id, page):
+        url = f"{self.LIST_URL}?bbsId={bbs_id}&pageIndex={page}"
+        for attempt in range(self.MAX_RETRIES):
             try:
-                total_count = int(span.get_text(strip=True).replace(",", ""))
-            except ValueError:
-                pass
+                r = self.session.get(url, timeout=30)
+                r.raise_for_status()
+                r.encoding = 'utf-8'
+                return BeautifulSoup(r.text, 'lxml'), r.text
+            except Exception:
+                if attempt < self.MAX_RETRIES - 1:
+                    time.sleep(1.5 * (attempt + 1))
+        return None, ''
 
-        # 게시글 파싱
-        items = []
-        table = soup.select_one("table")
-        if not table:
-            return items, total_count
+    def _get_total(self, html):
+        m = re.search(r'전체\s*<[^>]*>\s*(\d+)', html)
+        return int(m.group(1)) if m else 0
 
-        rows = table.select("tr")[1:]  # 헤더 제외
-        for row in rows:
-            cells = row.select("td")
-            if len(cells) < 5:
+    def _parse_rows(self, soup, board_name, bbs_id):
+        results = []
+        if not soup:
+            return results
+        for tr in soup.select('tbody tr'):
+            tds = tr.find_all('td')
+            if len(tds) < 3:
                 continue
-
-            number = cells[0].get_text(strip=True)
-            title_cell = cells[1]
-            author = cells[3].get_text(strip=True)
-            date = cells[4].get_text(strip=True)
-
-            link = title_cell.select_one("a")
-            detail_url = ""
-            title = ""
-            if link:
-                title = link.get_text(strip=True)
-                onclick = link.get("onclick", "")
-                seq_m = re.search(r'fn_view\((\d+)\)', onclick)
-                if seq_m:
-                    seq = seq_m.group(1)
-                    detail_url = f"{BASE_URL}/bbsArticle/view.do?bbsId=BID_INFO&seq={seq}"
-
-            items.append({
-                "number": number,
-                "title": title,
-                "date": date,
-                "url": detail_url,
-                "organization": author,
+            a = tr.select_one('a[onclick*="fn_view"], td.cont a')
+            if not a:
+                continue
+            onclick = a.get('onclick', '') or ''
+            m = re.search(r'fn_view\((\d+)\)', onclick)
+            if not m:
+                continue
+            nttid = m.group(1)
+            url = f"{self.VIEW_URL}?bbsId={bbs_id}&nttId={nttid}"
+            title = a.get_text(' ', strip=True)
+            title = re.sub(r'\s+', ' ', title).strip()
+            if not title or len(title) < 2:
+                continue
+            date = ''
+            for td in tds:
+                t = td.get_text(' ', strip=True)
+                m2 = re.search(r'(\d{4})[-./](\d{1,2})[-./](\d{1,2})', t)
+                if m2:
+                    date = f"{m2.group(1)}-{m2.group(2).zfill(2)}-{m2.group(3).zfill(2)}"
+                    break
+            results.append({
+                'title': title, 'date': date, 'url': url,
+                'organization': board_name, 'number': nttid,
             })
+        return results
 
-        return items, total_count
+    def _crawl_board(self, board_tuple):
+        bbs_id, board_name = board_tuple
+        results = []
+        seen = set()
+        first_soup, first_html = self._fetch(bbs_id, 1)
+        if not first_soup:
+            return results
+        total = self._get_total(first_html)
+        for it in self._parse_rows(first_soup, board_name, bbs_id):
+            if it['url'] not in seen:
+                seen.add(it['url'])
+                results.append(it)
+        last_p = max(1, math.ceil(total / self.PAGE_SIZE)) if total else 999
+        empty = 0
+        for page in range(2, last_p + 1):
+            time.sleep(self.PAGE_DELAY)
+            soup, _ = self._fetch(bbs_id, page)
+            rows = self._parse_rows(soup, board_name, bbs_id)
+            for it in rows:
+                if it['url'] not in seen:
+                    seen.add(it['url'])
+                    results.append(it)
+            if not rows:
+                empty += 1
+                if empty >= 3:
+                    break
+            else:
+                empty = 0
+        return results
 
-    WORKERS = 20
+    def search(self, keyword='', max_pages=999, start_date=None, end_date=None):
+        all_results = {}
+        for board in self.BOARDS:
+            try:
+                items = self._crawl_board(board)
+                for r in items:
+                    if r['url'] not in all_results:
+                        all_results[r['url']] = r
+                print(f"  [{board[1]}] {len(items)}건", flush=True)
+            except Exception as e:
+                print(f"  [{board[1]}] 에러: {str(e)[:60]}", flush=True)
+            time.sleep(0.5)
 
-    def search(self, keyword="", max_pages=10, start_date=None, end_date=None):
-        """입찰정보를 검색합니다."""
-        self._init_session()
-
-        # 날짜 기본값 (최근 30일)
+        items = list(all_results.values())
         if not start_date:
             start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
         if not end_date:
             end_date = datetime.now().strftime("%Y-%m-%d")
+        items = [it for it in items
+                 if not it['date'] or (start_date <= it['date'][:10] <= end_date)]
+        items.sort(key=lambda x: x['date'] or '', reverse=True)
+        print(f"[구리도시공사] 완료: 총 {len(items)}건", flush=True)
+        return items
 
-        first_items, total_count = self._fetch_page(keyword, 1)
-        total_pages = max(1, math.ceil(total_count / PAGE_SIZE))
-        actual_pages = min(total_pages, max_pages)
-        print(f"  [Page 1/{actual_pages}] {len(first_items)}건 수집 (전체 {total_count}건)")
 
-        all_items = []
-        stop = False
-
-        # 첫 페이지 날짜 필터
-        for item in first_items:
-            d = (item.get("date") or "").replace(".", "-").replace("/", "-")[:10]
-            if not d:
-                continue
-            if d < start_date:
-                stop = True
-                continue
-            if d <= end_date:
-                all_items.append(item)
-
-        # 나머지 페이지 순차 수집 + early stop
-        if not stop and actual_pages > 1:
-            page = 2
-            while page <= actual_pages and not stop:
-                # 배치 단위로 병렬 수집
-                batch_end = min(page + self.WORKERS, actual_pages + 1)
-                with ThreadPoolExecutor(max_workers=self.WORKERS) as executor:
-                    futures = {
-                        executor.submit(self._fetch_page, keyword, p): p
-                        for p in range(page, batch_end)
-                    }
-                    batch_results = {}
-                    for future in as_completed(futures):
-                        p = futures[future]
-                        try:
-                            items, _ = future.result()
-                            if items:
-                                batch_results[p] = items
-                        except Exception:
-                            pass
-
-                # 페이지 순서대로 날짜 체크
-                for p in sorted(batch_results.keys()):
-                    for item in batch_results[p]:
-                        d = (item.get("date") or "").replace(".", "-").replace("/", "-")[:10]
-                        if not d:
-                            continue
-                        if d < start_date:
-                            stop = True
-                            break
-                        if d <= end_date:
-                            all_items.append(item)
-                    if stop:
-                        break
-
-                page = batch_end
-
-        all_items.sort(key=lambda x: x["date"], reverse=True)
-        print(f"[구리도시공사] 완료: 총 {len(all_items)}건")
-        return all_items
+def main():
+    import urllib3
+    urllib3.disable_warnings()
+    c = GURIUCCrawler()
+    t0 = time.time()
+    items = c.search(start_date='2000-01-01', end_date='2099-12-31')
+    print(f'{len(items)}건 / {time.time()-t0:.0f}초')
+    from collections import Counter
+    for k, v in Counter(it['organization'] for it in items).most_common():
+        print(f'  {k}: {v}')
 
 
 if __name__ == "__main__":
-    import warnings
-    warnings.filterwarnings("ignore")
-
-    crawler = GURIUCCrawler()
-    print("=== 전체 조회 (3페이지) ===")
-    results = crawler.search("", max_pages=3)
-    for r in results[:5]:
-        print(f"  [{r['date']}] {r['title'][:50]} | {r['organization']}")
-
-    print("\n=== '공고' 검색 ===")
-    results2 = crawler.search("공고", max_pages=3)
-    for r in results2[:5]:
-        print(f"  [{r['date']}] {r['title'][:50]} | {r['organization']}")
+    main()

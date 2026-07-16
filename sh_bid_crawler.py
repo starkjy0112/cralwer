@@ -97,13 +97,21 @@ class SHBidCrawler:
             "pitem": str(PAGE_SIZE),
             "reqPage": str(page) if page > 1 else "",
         }
-        try:
-            resp = self.session.post(self.LIST_URL, data=data, timeout=30)
-            resp.raise_for_status()
-            return BeautifulSoup(resp.text, "lxml")
-        except requests.RequestException as e:
-            print(f"[ERROR] cat={category} page={page}: {e}")
-            return None
+        # 페이지 레벨 재시도
+        last_err = None
+        for attempt in range(3):
+            try:
+                resp = self.session.post(self.LIST_URL, data=data, timeout=30)
+                resp.raise_for_status()
+                return BeautifulSoup(resp.text, "lxml")
+            except requests.RequestException as e:
+                last_err = e
+                if attempt < 2:
+                    import time
+                    time.sleep(1)
+                    continue
+        print(f"[ERROR] cat={category} page={page}: {last_err}")
+        return None
 
     def _get_total_pages(self, soup: BeautifulSoup) -> int:
         """Extract total pages from '총N건 [page/total페이지]'."""
@@ -160,7 +168,8 @@ class SHBidCrawler:
 
         return results
 
-    WORKERS = 20
+    WORKERS = 5
+    MAX_RETRIES = 3
 
     def _fetch_month_category(self, year: int, month: int, cat: str, keyword: str, max_pages: int) -> list[dict]:
         """Fetch all pages for one (year, month, category) combination."""
@@ -206,20 +215,26 @@ class SHBidCrawler:
             for cat in self.CATEGORIES
         ]
 
-        # Parallel fetch all month × category combinations
+        # Parallel fetch with retry (월×카테고리 단위 재시도)
         all_raw: list[list[dict]] = []
-        with ThreadPoolExecutor(max_workers=self.WORKERS) as executor:
-            futures = {
-                executor.submit(self._fetch_month_category, y, m, c, keyword, max_pages): (y, m, c)
-                for y, m, c in tasks
-            }
-            for future in as_completed(futures):
-                try:
-                    items = future.result()
-                    if items:
-                        all_raw.append(items)
-                except Exception:
-                    pass
+        pending = list(tasks)
+        for attempt in range(self.MAX_RETRIES):
+            if not pending:
+                break
+            failed = []
+            with ThreadPoolExecutor(max_workers=self.WORKERS) as executor:
+                futures = {
+                    executor.submit(self._fetch_month_category, y, m, c, keyword, max_pages): (y, m, c)
+                    for y, m, c in pending
+                }
+                for future in as_completed(futures):
+                    task_key = futures[future]
+                    try:
+                        items = future.result()
+                        all_raw.append(items or [])
+                    except Exception:
+                        failed.append(task_key)
+            pending = failed
 
         # Dedup
         all_results: list[dict] = []

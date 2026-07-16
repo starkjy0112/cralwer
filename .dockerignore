@@ -1,0 +1,31 @@
+# Docker 이미지에 불필요한 파일 제외 (빌드 속도)
+__pycache__/
+*.pyc
+*.pyo
+.git/
+.gitignore
+.venv/
+venv/
+.env
+.env.local
+*.log
+.DS_Store
+
+# 로컬 DB (프로덕션에선 fly volume 사용)
+crawlers.db
+crawlers.db-journal
+crawlers.db-wal
+crawlers.db-shm
+
+# 개발 파일
+북마크.html
+downloads/
+Baccarat/
+.claude/
+*.jsonl
+baccarat_live.py
+
+# xlsx (이미지 생성용 참고 파일 - 필요하면 개별 커밋)
+분석결과_*/
+tasks/
+memory/

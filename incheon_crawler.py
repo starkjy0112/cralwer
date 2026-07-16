@@ -77,7 +77,7 @@ class IncheonCrawler:
         resp = self.session.post(
             url, data=body,
             headers={"Content-Type": "application/x-www-form-urlencoded"},
-            timeout=15,
+            timeout=60,
         )
         text = resp.content.decode("utf-8", errors="replace")
         soup = BeautifulSoup(text, "lxml")
@@ -127,7 +127,8 @@ class IncheonCrawler:
 
         return items, total_count
 
-    WORKERS = 20
+    WORKERS = 3
+    MAX_RETRIES = 5
 
     def search(self, keyword="", max_pages=10, start_date=None, end_date=None):
         first_items, total_count = self._fetch_page(keyword, 1, start_date, end_date)
@@ -139,19 +140,27 @@ class IncheonCrawler:
             all_items = first_items
         else:
             page_results = {1: first_items}
-            with ThreadPoolExecutor(max_workers=self.WORKERS) as executor:
-                futures = {
-                    executor.submit(self._fetch_page, keyword, p, start_date, end_date): p
-                    for p in range(2, actual_pages + 1)
-                }
-                for future in as_completed(futures):
-                    p = futures[future]
-                    try:
-                        items, _ = future.result()
-                        if items:
+            pending = set(range(2, actual_pages + 1))
+            for attempt in range(self.MAX_RETRIES):
+                if not pending:
+                    break
+                failed = set()
+                with ThreadPoolExecutor(max_workers=self.WORKERS) as executor:
+                    futures = {
+                        executor.submit(self._fetch_page, keyword, p, start_date, end_date): p
+                        for p in pending
+                    }
+                    for future in as_completed(futures):
+                        p = futures[future]
+                        try:
+                            items, _ = future.result()
                             page_results[p] = items
-                    except Exception:
-                        pass
+                        except Exception:
+                            failed.add(p)
+                pending = failed
+                if pending and attempt < self.MAX_RETRIES - 1:
+                    import time
+                    time.sleep(2)
 
             all_items = []
             for p in sorted(page_results.keys()):

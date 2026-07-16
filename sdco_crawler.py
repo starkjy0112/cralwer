@@ -147,21 +147,30 @@ class SDCOCrawler:
         if not first_results or actual_pages <= 1:
             return first_results
 
-        # 나머지 페이지 병렬 조회
+        # 나머지 페이지 병렬 조회 (재시도 포함)
         page_results = {1: first_results}
-        with ThreadPoolExecutor(max_workers=self.WORKERS) as executor:
-            futures = {
-                executor.submit(self._fetch_and_parse, p, keyword, start_date=None, end_date=None): p
-                for p in range(2, actual_pages + 1)
-            }
-            for future in as_completed(futures):
-                p = futures[future]
-                try:
-                    items = future.result()
-                    if items:
+        pending = set(range(2, actual_pages + 1))
+        MAX_RETRIES = 3
+        for attempt in range(MAX_RETRIES):
+            if not pending:
+                break
+            failed = set()
+            with ThreadPoolExecutor(max_workers=self.WORKERS) as executor:
+                futures = {
+                    executor.submit(self._fetch_and_parse, p, keyword): p
+                    for p in pending
+                }
+                for future in as_completed(futures):
+                    p = futures[future]
+                    try:
+                        items = future.result()
                         page_results[p] = items
-                except Exception:
-                    pass
+                    except Exception:
+                        failed.add(p)
+            pending = failed
+            if pending and attempt < MAX_RETRIES - 1:
+                import time
+                time.sleep(1)
 
         all_results = []
         for p in sorted(page_results.keys()):

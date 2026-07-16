@@ -1,311 +1,182 @@
+# -*- coding: utf-8 -*-
 """
-Crawler for 전북개발공사 (Jeonbuk Development Corporation) 통합검색 > 게시판
-Target URL: https://www.jbdc.co.kr/search/board.do?searchWrd=
+전북개발공사 (jbdc) - xlsx 32행
+통합검색: https://www.jbdc.co.kr/search/board.do?searchWrd=<키워드>
 
-The unified board search page returns all matching results in a single page
-(no server-side pagination). Each result contains:
-  - Board category (e.g., 공지사항, 입찰공고, 언론보도, etc.)
-  - Title
-  - Link to detail page (with bbsId and nttId parameters)
+**빈 검색(searchWrd=)이 가능** - 전체 3,216건을 한 번에 반환한다.
+따라서 단일 빈 검색으로 전량 수집. (구버전은 다중 키워드였지만 부족했음)
 
-Note: The unified search list page does NOT provide dates.
-Dates are only available on individual detail pages.
+페이지네이션 없이 결과 전량 나옴.
+날짜는 리스트에 없고 view 페이지에만 있으므로 date는 빈값으로 둔다.
 """
-
-from __future__ import annotations
-
 import re
-from datetime import datetime, timedelta
-import logging
+import ssl
+import time
 import requests
 from requests.adapters import HTTPAdapter
+from urllib3.util.ssl_ import create_urllib3_context
 from bs4 import BeautifulSoup
-from urllib.parse import urljoin, quote
-from typing import Optional, List, Dict
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timedelta
+from urllib.parse import quote
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-)
-logger = logging.getLogger(__name__)
 
-BASE_URL = "https://www.jbdc.co.kr"
-SEARCH_URL = f"{BASE_URL}/search/board.do"
-ITEMS_PER_PAGE = 10
+class _TLSAdapter(HTTPAdapter):
+    """jbdc 서버의 옛 SSL/cipher 호환 어댑터."""
+    def init_poolmanager(self, *args, **kwargs):
+        ctx = create_urllib3_context()
+        ctx.set_ciphers('DEFAULT@SECLEVEL=0')
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        try:
+            ctx.minimum_version = ssl.TLSVersion.TLSv1
+        except Exception:
+            pass
+        kwargs['ssl_context'] = ctx
+        return super().init_poolmanager(*args, **kwargs)
+
+
+# 카테고리 라벨(리스트의 [xxx]) → 조직명 매핑
+CATEGORY_MAP = {
+    '공지사항': '공지사항',
+    '입찰공고': '입찰공고',
+    '언론보도': '언론보도',
+    '분양임대': '분양임대',
+    '포토갤러리': '포토갤러리',
+    '자유게시판': '자유게시판',
+    '자료실': '자료실',
+    'FAQ': 'FAQ',
+    'Q&A': 'Q&A',
+    '고객참여': '고객참여',
+}
 
 
 class JBDCCrawler:
-    """
-    Crawler for 전북개발공사 통합검색 > 게시판.
+    """전북개발공사 통합검색 크롤러 (다중 키워드 dedup)."""
 
-    The unified search endpoint returns all matching results on a single HTML page.
-    Since there is no server-side pagination, the `max_pages` parameter controls
-    how many "virtual pages" of results to return, with each page containing
-    up to 10 items.
-    """
+    BASE_URL = "https://www.jbdc.co.kr"
+    SEARCH_PATH = "/search/board.do"
+
+    # 빈 검색으로 전량 반환됨. 백업으로 몇 개 키워드 유지 (혹시 사이트 변경 대비)
+    KEYWORDS = ['']  # 빈 문자열 = 전체 검색
+
+    WORKERS = 1
+    MAX_RETRIES = 6
+    REQUEST_DELAY = 0.5
 
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update({
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
-            ),
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-            "Referer": BASE_URL,
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                          "AppleWebKit/537.36 (KHTML, like Gecko) "
+                          "Chrome/131.0.0.0 Safari/537.36",
+            "Accept-Language": "ko-KR,ko;q=0.9",
         })
-        adapter = HTTPAdapter(pool_connections=1, pool_maxsize=20)
-        self.session.mount("https://", adapter)
-        self.session.mount("http://", adapter)
+        self.session.mount("https://", _TLSAdapter(pool_connections=1, pool_maxsize=20))
+        self.session.verify = False
 
-    def _fetch_search_page(self, keyword: str) -> Optional[str]:
-        """
-        Fetch the unified board search page for the given keyword.
+    def _fetch(self, url):
+        for attempt in range(self.MAX_RETRIES):
+            try:
+                r = self.session.get(url, timeout=45)
+                r.raise_for_status()
+                r.encoding = 'utf-8'
+                return BeautifulSoup(r.text, 'lxml')
+            except Exception:
+                if attempt < self.MAX_RETRIES - 1:
+                    time.sleep(1.5 * (attempt + 1))
+        return None
 
-        Uses POST with stype=board and searchWrd=keyword.
-        Falls back to GET if POST fails.
-
-        Returns the HTML content as a string, or None on failure.
-        """
-        # Try POST first (matches the form's submit behavior)
-        try:
-            resp = self.session.post(
-                SEARCH_URL,
-                data={"stype": "board", "searchWrd": keyword},
-                timeout=30,
-            )
-            resp.raise_for_status()
-            resp.encoding = "utf-8"
-            if "comm_search_ul" in resp.text:
-                return resp.text
-        except requests.RequestException as e:
-            logger.warning("POST request failed: %s. Trying GET...", e)
-
-        # Fallback: GET request
-        try:
-            resp = self.session.get(
-                SEARCH_URL,
-                params={"searchWrd": keyword},
-                timeout=30,
-            )
-            resp.raise_for_status()
-            resp.encoding = "utf-8"
-            return resp.text
-        except requests.RequestException as e:
-            logger.error("GET request also failed: %s", e)
-            return None
-
-    def _parse_results(self, html: str, keyword: str) -> List[Dict]:
-        """
-        Parse the search result HTML and extract items.
-
-        Each <li> in <ul class="comm_search_ul"> has the structure:
-            <li>
-              <span class="color_b">[카테고리]</span>
-              <a href="/search/view.do?searchWrd=...&bbsId=...&nttId=...">
-                제목
-                <span class="mgl-20 comm_search_more">내용 자세히보기</span>
-              </a>
-            </li>
-
-        Returns a list of dicts with keys:
-            title, date, url, organization, number
-        """
-        soup = BeautifulSoup(html, "lxml")
-        results: List[Dict] = []
-
-        # Extract total count for logging
-        total_tag = soup.find("p", class_="comm_search_title")
-        if total_tag:
-            strong_tags = total_tag.find_all("strong")
-            if len(strong_tags) >= 2:
-                total_count = strong_tags[1].get_text(strip=True)
-                logger.info(
-                    "Search keyword '%s': total %s results found on server.",
-                    keyword,
-                    total_count,
-                )
-
-        # Find the result list
-        result_list = soup.find("ul", class_="comm_search_ul")
-        if not result_list:
-            logger.warning("No result list (ul.comm_search_ul) found in HTML.")
+    def _parse_search(self, soup):
+        """통합검색 결과 파싱: [카테고리]제목 링크(nttId, bbsId 포함)."""
+        results = []
+        if not soup:
             return results
-
-        items = result_list.find_all("li")
-        for idx, li in enumerate(items, start=1):
-            # Extract organization/category: text inside <span class="color_b">
-            org_span = li.find("span", class_="color_b")
-            organization = ""
-            if org_span:
-                raw_org = org_span.get_text(strip=True)
-                # Remove brackets: [공지사항] -> 공지사항
-                organization = raw_org.strip("[]")
-
-            # Extract title and URL from <a> tag
-            link_tag = li.find("a")
-            if not link_tag:
+        # 검색 결과는 li 안에 <span class="color_b">[카테고리]</span><a href="/search/view.do?...">제목</a>
+        for a in soup.select('a[href*="/search/view.do"]'):
+            href = a.get('href', '') or ''
+            if 'nttId=' not in href:
                 continue
-
-            href = link_tag.get("href", "")
-            url = urljoin(BASE_URL, href) if href else ""
-
-            # Extract title text, excluding the "내용 자세히보기" span
-            # Clone the tag to avoid modifying the original
-            title_parts = []
-            for child in link_tag.children:
-                if hasattr(child, "attrs") and "comm_search_more" in child.get("class", []):
-                    continue
-                text = child.get_text(strip=True) if hasattr(child, "get_text") else str(child).strip()
-                if text:
-                    title_parts.append(text)
-            title = " ".join(title_parts).strip()
-
-            # Extract nttId from URL as the item number
-            ntt_id = ""
-            ntt_match = re.search(r"nttId=(\d+)", href)
-            if ntt_match:
-                ntt_id = ntt_match.group(1)
-
+            # 카테고리 라벨(같은 li 안의 span)
+            parent = a.find_parent('li') or a.parent
+            cat_span = parent.select_one('span.color_b') if parent else None
+            category = ''
+            if cat_span:
+                ctxt = cat_span.get_text(strip=True)
+                m = re.match(r'\[([^\]]+)\]', ctxt)
+                if m:
+                    category = m.group(1).strip()
+            # 제목
+            title = a.get_text(' ', strip=True)
+            title = re.sub(r'\s*내용\s*자세히보기\s*$', '', title).strip()
+            if not title or len(title) < 2:
+                continue
+            # nttId, bbsId 추출
+            m_ntt = re.search(r'nttId=(\d+)', href)
+            m_bbs = re.search(r'bbsId=([A-Za-z0-9_]+)', href)
+            if not m_ntt:
+                continue
+            ntt = m_ntt.group(1)
+            bbs = m_bbs.group(1) if m_bbs else ''
+            # URL 정규화: searchWrd 제거해서 keyword별 dedup 가능하게
+            url = f"{self.BASE_URL}/search/view.do?bbsId={bbs}&nttId={ntt}"
+            org = CATEGORY_MAP.get(category, category or '통합검색')
             results.append({
-                "title": title,
-                "date": "",  # Not available in unified search list
-                "url": url,
-                "organization": organization,
-                "number": ntt_id,
+                'title': title,
+                'date': '',   # 리스트에는 날짜 없음
+                'url': url,
+                'organization': org,
+                'number': ntt,
+                '_bbs': bbs,
             })
-
         return results
 
-    WORKERS = 10
+    def _search_keyword(self, keyword):
+        url = f"{self.BASE_URL}{self.SEARCH_PATH}?searchWrd={quote(keyword)}"
+        soup = self._fetch(url)
+        return self._parse_search(soup)
 
-    def _fetch_date(self, url: str) -> str:
-        """상세 페이지에서 등록일 추출"""
-        try:
-            resp = self.session.get(url, timeout=15)
-            resp.encoding = "utf-8"
-            soup = BeautifulSoup(resp.text, "lxml")
-            for th in soup.select("th"):
-                if "등록일" in th.get_text(strip=True):
-                    td = th.find_next_sibling("td")
-                    if td:
-                        date_text = td.get_text(strip=True)
-                        m = re.match(r"(\d{4}[./-]\d{2}[./-]\d{2})", date_text)
-                        if m:
-                            return m.group(1).replace(".", "-").replace("/", "-")
-        except Exception:
-            pass
-        return ""
+    def search(self, keyword='', max_pages=999, start_date=None, end_date=None):
+        all_results = {}
+        total_kw = len(self.KEYWORDS)
+        for idx, kw in enumerate(self.KEYWORDS, 1):
+            try:
+                items = self._search_keyword(kw)
+                added = 0
+                for r in items:
+                    key = r['url']
+                    if key not in all_results:
+                        all_results[key] = r
+                        added += 1
+                print(f"  [{idx}/{total_kw}] '{kw}' → {len(items)}건 (신규 {added})", flush=True)
+            except Exception as e:
+                print(f"  [{idx}/{total_kw}] '{kw}' 에러: {str(e)[:60]}", flush=True)
+            time.sleep(self.REQUEST_DELAY)
 
-    def _fetch_dates_parallel(self, results: List[Dict]):
-        """상세 페이지에서 날짜를 병렬로 가져오기"""
-        urls = [(i, r["url"]) for i, r in enumerate(results) if r["url"]]
-        if not urls:
-            return
-
-        with ThreadPoolExecutor(max_workers=self.WORKERS) as executor:
-            futures = {
-                executor.submit(self._fetch_date, url): idx
-                for idx, url in urls
-            }
-            done = 0
-            for future in as_completed(futures):
-                idx = futures[future]
-                try:
-                    date = future.result()
-                    if date:
-                        results[idx]["date"] = date
-                except Exception:
-                    pass
-                done += 1
-                if done % 50 == 0:
-                    logger.info("  날짜 조회 진행: %d/%d", done, len(urls))
-
-    def search(self, keyword: str = "", max_pages: int = 10, start_date=None, end_date=None) -> List[Dict]:
-        """
-        Search the 전북개발공사 unified board search (통합검색 > 게시판).
-
-        Args:
-            keyword: Search keyword. Empty string returns all posts.
-            max_pages: Maximum number of virtual pages to return.
-                       Each page contains up to 10 items.
-                       The unified search returns all results at once
-                       (no server-side pagination), so this parameter
-                       limits the total number of returned items to
-                       max_pages * 10.
-
-        Returns:
-            A list of dicts, each containing:
-                - title (str, start_date=None, end_date=None): Post title
-                - date (str): Empty string (not available in unified search)
-                - url (str): Full URL to the detail page
-                - organization (str): Board category (e.g., 공지사항, 입찰공고)
-                - number (str): Post ID (nttId)
-        """
-        logger.info(
-            "Starting search: keyword='%s', max_pages=%d", keyword, max_pages
-        )
-
-        html = self._fetch_search_page(keyword)
-        if not html:
-            logger.error("Failed to fetch search page.")
-            return []
-
-        all_results = self._parse_results(html, keyword)
-        max_items = max_pages * ITEMS_PER_PAGE
-        limited_results = all_results[:max_items]
-
-        logger.info(
-            "Parsed %d total results, returning %d (max_pages=%d, %d items/page).",
-            len(all_results),
-            len(limited_results),
-            max_pages,
-            ITEMS_PER_PAGE,
-        )
-
-        # 상세 페이지에서 날짜 병렬 조회
-        if limited_results:
-            logger.info("날짜 조회 시작 (%d건, %d workers)...", len(limited_results), self.WORKERS)
-            self._fetch_dates_parallel(limited_results)
-
-
-        # 날짜 필터 (기본: 최근 30일)
+        items = list(all_results.values())
+        # 날짜는 리스트에 없으므로 필터를 통과시킴 (date 빈문자열 통과)
         if not start_date:
             start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
         if not end_date:
             end_date = datetime.now().strftime("%Y-%m-%d")
-        limited_results = [_item for _item in limited_results
-                     if (lambda d: d and start_date <= d <= end_date)(
-                         (_item.get("date") or "").replace(".", "-").replace("/", "-")[:10])]
+        items = [it for it in items
+                 if not it['date'] or (start_date <= it['date'][:10] <= end_date)]
+        # nttId 내림차순 (최신부터)
+        items.sort(key=lambda x: int(x.get('number') or 0), reverse=True)
+        print(f"[전북개발공사] 통합검색 완료: 총 {len(items)}건", flush=True)
+        return items
 
-        return limited_results
+
+def main():
+    import urllib3
+    urllib3.disable_warnings()
+    c = JBDCCrawler()
+    t0 = time.time()
+    items = c.search(start_date='2000-01-01', end_date='2099-12-31')
+    print(f'{len(items)}건 / {time.time()-t0:.0f}초')
+    from collections import Counter
+    for k, v in Counter(it['organization'] for it in items).most_common():
+        print(f'  {k}: {v}')
 
 
 if __name__ == "__main__":
-    crawler = JBDCCrawler()
-
-    keyword = "공고"
-    print(f"{'='*80}")
-    print(f"  전북개발공사 통합검색 > 게시판 Crawler Test")
-    print(f"  Keyword: '{keyword}'")
-    print(f"{'='*80}\n")
-
-    results = crawler.search(keyword=keyword, max_pages=3)
-
-    print(f"Total results returned: {len(results)}\n")
-    print(f"{'='*80}")
-
-    for i, item in enumerate(results, start=1):
-        print(f"\n[{i}]")
-        print(f"  Title        : {item['title']}")
-        print(f"  Date         : {item['date'] or '(N/A - unified search)'}")
-        print(f"  URL          : {item['url']}")
-        print(f"  Organization : {item['organization']}")
-        print(f"  Number       : {item['number']}")
-
-    print(f"\n{'='*80}")
-    print(f"Test complete. {len(results)} items retrieved.")
-    print(f"{'='*80}")
+    main()

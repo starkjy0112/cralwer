@@ -85,8 +85,8 @@ class LHCrawler:
                 if date_end and len(date_end.split(".")[0]) == 2:
                     date_end = "20" + date_end.replace(".", "-")
 
-            # 상세 링크 (JavaScript에서 idx로 POST 폼 전송)
-            detail_link = "https://partner.lh.or.kr/deliberate/deliberate.asp"
+            # 상세 링크 - 우리 Flask 서버가 POST 리다이렉트로 LH 상세 팝업 자동 열기
+            detail_link = f"http://localhost:5001/lh/detail/{idx}" if idx else "https://partner.lh.or.kr/deliberate/deliberate.asp"
 
             results.append({
                 "title": title,

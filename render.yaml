@@ -4,6 +4,12 @@ services:
     runtime: docker
     plan: free
     dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
     envVars:
       - key: PORT
         value: 5001
+      # Render Dashboard에서 직접 값 입력 (sync: false)
+      - key: ADMIN_TOKEN
+        sync: false
+      - key: NARA_API_KEY
+        sync: false

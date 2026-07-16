@@ -388,6 +388,50 @@ from dongjak_crawler import DongjakCrawler
 app = Flask(__name__)
 
 
+# ============================================================================
+# 관리자 인증 (환경변수 ADMIN_TOKEN 기반)
+# 환경변수 미설정 시 자동 임의 토큰 생성 (개발 편의)
+# ============================================================================
+import secrets
+ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN")
+if not ADMIN_TOKEN:
+    ADMIN_TOKEN = secrets.token_urlsafe(24)
+    print(f"[auth] ADMIN_TOKEN 미설정, 임의 생성: {ADMIN_TOKEN}")
+    print(f"[auth] 관리자 URL: http://localhost:5001/admin?token={ADMIN_TOKEN}")
+
+
+def require_admin_token(f):
+    """관리자 라우트 보호 데코레이터. ?token= 또는 X-Admin-Token 헤더."""
+    from functools import wraps
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        provided = (request.args.get("token")
+                    or request.headers.get("X-Admin-Token")
+                    or request.cookies.get("admin_token"))
+        if provided != ADMIN_TOKEN:
+            # HTML 요청이면 인증 페이지, API면 401 JSON
+            if request.path.startswith("/api/"):
+                return jsonify({"error": "unauthorized",
+                                "hint": "?token=... or X-Admin-Token header"}), 401
+            return f"""
+                <html><body style="font-family:sans-serif;padding:2rem;">
+                <h2>🔒 관리자 인증 필요</h2>
+                <p>ADMIN_TOKEN 환경변수 또는 URL <code>?token=&lt;토큰&gt;</code>으로 접근하세요.</p>
+                <p>서버 로그에서 임의 생성된 토큰 확인 가능합니다.</p>
+                </body></html>
+            """, 401
+        # 인증 성공 시 쿠키 저장 (편의)
+        resp = f(*args, **kwargs)
+        try:
+            from flask import make_response
+            resp = make_response(resp)
+            resp.set_cookie("admin_token", ADMIN_TOKEN, max_age=86400, httponly=True, samesite="Lax")
+        except Exception:
+            pass
+        return resp
+    return wrapper
+
+
 # 나라장터 래퍼 클래스
 class NaraCrawlerWrapper:
     """나라장터 크롤러 래퍼"""
@@ -424,14 +468,15 @@ CRAWLERS = {
         "instance": AsyncCrawlerWrapper(AlioCrawler),
         "url": "https://www.alio.go.kr"
     },
-    # alio_item 비활성화: alio (bidList.do)와 99.95% 중복 데이터.
-    # 미래에 reportFormRootNo를 다른 카테고리(수의계약 등)로 변경 시 재활성화.
-    # "alio_item": {
-    #     "name": "알리오",
-    #     "type": "물자구매",
-    #     "instance": AsyncCrawlerWrapper(AlioItemCrawler),
-    #     "url": "https://www.alio.go.kr"
-    # },
+    # alio_item: 기관별 입찰공고 (xlsx 13행 /item/itemOrganList.do 매칭)
+    # alio (/occasional/)는 수시공시만, alio_item (/item/)은 기관별 전체 입찰공고로 별도 데이터셋.
+    # 인천항만공사(C0107) 검증: 사이트 478건 = 우리 API 478건 일치
+    "alio_item": {
+        "name": "알리오",
+        "type": "기관별 입찰공고",
+        "instance": AsyncCrawlerWrapper(AlioItemCrawler),
+        "url": "https://alio.go.kr/item/itemOrganList.do?reportFormRootNo=B1030"
+    },
     "lh": {
         "name": "LH 파트너몰",
         "type": "자재공법심의",
@@ -2557,44 +2602,84 @@ GROUP_ORDER = [
 
 @app.route("/")
 def index():
-    """메인 대시보드 페이지"""
-    return render_template("dashboard.html", crawlers=CRAWLERS)
+    """메인 대시보드 페이지 - crawler_urls DB에 등록된 검증 크롤러만 기본 표시."""
+    import db
+    verified_ids = set(db.get_verified_crawler_ids())
+    return render_template("dashboard.html",
+                           crawlers=CRAWLERS,
+                           verified_ids=list(verified_ids))
 
 
 @app.route("/unified")
 def unified():
     """통합 검색 페이지"""
+    import db
+    verified_ids = set(db.get_verified_crawler_ids())
     ordered_groups = {g: CRAWLER_GROUPS.get(g, []) for g in GROUP_ORDER if g in CRAWLER_GROUPS}
-    return render_template("unified.html", crawlers=CRAWLERS, crawler_groups=ordered_groups)
+    return render_template("unified.html",
+                           crawlers=CRAWLERS,
+                           crawler_groups=ordered_groups,
+                           verified_ids=list(verified_ids))
 
 
 @app.route("/api/crawler_groups")
 def get_crawler_groups():
-    """크롤러 그룹 목록 조회"""
+    """크롤러 그룹 목록 조회.
+    ?verified_only=1 이면 crawler_urls에 등록된 검증완료 크롤러만."""
+    import db
+    verified_only = request.args.get("verified_only") == "1"
+    verified = set(db.get_verified_crawler_ids()) if verified_only else None
+
     result = {}
     for g in GROUP_ORDER:
         if g not in CRAWLER_GROUPS:
             continue
-        result[g] = [{
-            "id": cid,
-            "name": CRAWLERS[cid]["name"],
-            "type": CRAWLERS[cid]["type"],
-        } for cid in CRAWLER_GROUPS[g]]
+        group_items = []
+        for cid in CRAWLER_GROUPS[g]:
+            if verified is not None and cid not in verified:
+                continue
+            group_items.append({
+                "id": cid,
+                "name": CRAWLERS[cid]["name"],
+                "type": CRAWLERS[cid]["type"],
+                "verified": (verified is None or cid in verified),
+            })
+        if group_items:  # 빈 그룹 제외
+            result[g] = group_items
     return jsonify(result)
 
 
 @app.route("/api/crawlers")
 def get_crawlers():
-    """크롤러 목록 조회"""
+    """크롤러 목록 조회.
+    ?verified_only=1 이면 crawler_urls에 등록된 검증완료 크롤러만."""
+    import db
+    verified_only = request.args.get("verified_only") == "1"
+    verified = set(db.get_verified_crawler_ids()) if verified_only else None
+
     crawler_list = []
     for key, info in CRAWLERS.items():
+        is_verified = (key in verified) if verified is not None else False
+        if verified_only and key not in verified:
+            continue
         crawler_list.append({
             "id": key,
             "name": info["name"],
             "type": info["type"],
-            "url": info["url"]
+            "url": info["url"],
+            "verified": is_verified,
         })
     return jsonify(crawler_list)
+
+
+@app.route("/api/verified_crawlers")
+def api_verified_crawlers():
+    """검증된 크롤러 ID 리스트."""
+    import db
+    return jsonify({
+        "verified_ids": db.get_verified_crawler_ids(),
+        "total_registered": len(CRAWLERS),
+    })
 
 
 @app.route("/api/search/<crawler_id>")
@@ -2690,22 +2775,96 @@ def get_stats():
     return jsonify(stats)
 
 
+@app.route("/lh/download")
+def lh_download_proxy():
+    """LH 파일 다운로드 프록시 - 서버가 세션 만들어 다운받아 사용자에게 스트림"""
+    import requests
+    from flask import Response, request as flask_request
+    type_p = flask_request.args.get('type', 'REVIEW')
+    pidx = flask_request.args.get('pidx', '')
+    idx = flask_request.args.get('idx', '')
+    if not (pidx and idx):
+        return "pidx, idx 필요", 400
+    try:
+        s = requests.Session()
+        s.headers['User-Agent'] = 'Mozilla/5.0'
+        s.get('https://partner.lh.or.kr/deliberate/deliberate.asp', timeout=10)
+        dl_url = f'https://partner.lh.or.kr/common/download.asp?type={type_p}&pidx={pidx}&idx={idx}'
+        r = s.get(dl_url, timeout=60, stream=True)
+        # 파일명, 헤더 그대로 전달
+        headers = {}
+        for k in ['Content-Type', 'Content-Disposition', 'Content-Length']:
+            if k in r.headers:
+                headers[k] = r.headers[k]
+        return Response(r.iter_content(chunk_size=8192), status=r.status_code, headers=headers)
+    except Exception as e:
+        return f"다운로드 실패: {e}", 500
+
+
 @app.route("/lh/detail/<int:idx>")
 def lh_detail_redirect(idx):
-    """LH 파트너몰 상세 페이지로 POST 리다이렉트"""
-    return f'''
-    <!DOCTYPE html>
-    <html>
-    <head><meta charset="utf-8"><title>LH 상세페이지 이동중...</title></head>
-    <body>
-        <form id="lhForm" method="POST" action="https://partner.lh.or.kr/deliberate/deliberate_detail.asp">
-            <input type="hidden" name="re_idx" value="{idx}">
-        </form>
-        <script>document.getElementById('lhForm').submit();</script>
-        <noscript><p>JavaScript가 필요합니다. <a href="https://partner.lh.or.kr/deliberate/deliberate.asp">메인 페이지로 이동</a></p></noscript>
-    </body>
-    </html>
-    '''
+    """LH 파트너몰 상세 페이지로 POST 리다이렉트 (다운로드 링크 절대화 + goHref 정의)"""
+    import requests, re
+    try:
+        # 세션 확보
+        s = requests.Session()
+        s.headers['User-Agent'] = 'Mozilla/5.0'
+        s.get('https://partner.lh.or.kr/deliberate/deliberate.asp', timeout=10)
+        # POST로 상세 HTML 획득
+        r = s.post('https://partner.lh.or.kr/deliberate/deliberate_detail.asp',
+                   data={'re_idx': str(idx)}, timeout=15)
+        r.encoding = 'utf-8'
+        html = r.text
+        # 상대 URL을 절대 URL로 변환 (/common/download.asp?... → https://partner.lh.or.kr/...)
+        html = re.sub(r"goHref\('(/[^']+)'", r"goHref('https://partner.lh.or.kr\1'", html)
+        # goHref 함수 정의 주입
+        script = '''
+<script>
+function goHref(url, target){
+    if(!url){ alert("오픈 준비중입니다."); return; }
+    if(!target){ location.href = url; }
+    else { window.open(url, target); }
+}
+</script>
+'''
+        return f'''<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>LH 자재·공법 심의 상세</title>
+<link rel="stylesheet" href="https://partner.lh.or.kr/css/common.css">
+{script}
+</head><body>{html}</body></html>'''
+    except Exception as e:
+        # 폴백: 브라우저에서 fetch로 POST + goHref 주입
+        return f'''<!DOCTYPE html><html><head><meta charset="utf-8"><title>LH 자재·공법 심의 상세</title>
+<link rel="stylesheet" href="https://partner.lh.or.kr/css/common.css">
+<script>
+function goHref(url, target){{
+    if(!url){{ alert("오픈 준비중입니다."); return; }}
+    if(!target){{ location.href = url; }}
+    else {{ window.open(url, target); }}
+}}
+window.addEventListener('DOMContentLoaded', async () => {{
+    try {{
+        const formData = new URLSearchParams();
+        formData.append('re_idx', '{idx}');
+        const res = await fetch('https://partner.lh.or.kr/deliberate/deliberate_detail.asp', {{
+            method: 'POST', body: formData, credentials: 'include',
+            headers: {{'Content-Type': 'application/x-www-form-urlencoded'}}
+        }});
+        let html = await res.text();
+        // 다운로드 링크를 우리 서버 프록시로 변환 (세션 문제 우회)
+        html = html.replace(
+            /<a[^>]*onclick="goHref\\('\\/common\\/download\\.asp\\?([^']+)'[^"]*"[^>]*>/g,
+            function(m, params){{ return '<a href="/lh/download?' + params.replace(/&amp;/g, '&') + '" target="_blank">'; }}
+        );
+        // 그 외 상대 링크는 절대화
+        html = html.replace(/goHref\\('\\/([^']+)'/g, "goHref('https://partner.lh.or.kr/$1'");
+        document.getElementById('lh_content').innerHTML = html;
+    }} catch (e) {{
+        document.getElementById('lh_content').innerHTML = '<p>로드 실패. <a href="https://partner.lh.or.kr/deliberate/deliberate.asp">LH 목록으로</a></p>';
+    }}
+}});
+</script>
+</head><body><div id="lh_content"><p>로딩 중...</p></div></body></html>'''
 
 
 @app.route("/api/search_all")
@@ -2884,7 +3043,20 @@ def api_db_stats():
     return jsonify(db.get_stats())
 
 
+@app.route("/health")
+def health_check():
+    """헬스체크 - Fly.io/Render/K8s 등 로드밸런서용."""
+    import db
+    try:
+        with db.get_conn() as conn:
+            conn.cursor().execute("SELECT 1").fetchone()
+        return {"status": "ok", "db": "connected"}, 200
+    except Exception as e:
+        return {"status": "error", "error": str(e)[:200]}, 503
+
+
 @app.route("/api/manual_collect", methods=["POST"])
+@require_admin_token
 def api_manual_collect():
     """수동 수집 트리거"""
     import collector, threading
@@ -2897,10 +3069,284 @@ def api_manual_collect():
     return jsonify({"started": True, "days": days})
 
 
-if __name__ == "__main__":
+# ========================================================================
+# xlsx 요구 기능: 관리자 페이지 + API (5개 기능)
+# ========================================================================
+
+@app.route("/admin")
+@require_admin_token
+def admin_page():
+    """관리자 페이지 - xlsx 5개 요구기능 통합 UI."""
+    return render_template("admin.html")
+
+
+# ---------- ① 검색어 관리 ----------
+
+@app.route("/api/keywords", methods=["GET"])
+def api_keywords_list():
+    """검색어 전체 조회. xlsx 기본 25개 + 사용자 커스텀."""
     import db
-    db.init_db()
-    warmup_cookies()
-    setup_scheduler()
+    return jsonify(db.get_keywords())
+
+
+@app.route("/api/keywords", methods=["POST"])
+@require_admin_token
+def api_keywords_add():
+    """검색어 추가 (사용자 커스텀)."""
+    import db
+    kw = (request.json or {}).get("keyword", "").strip()
+    if not kw:
+        return jsonify({"ok": False, "error": "keyword required"}), 400
+    if db.add_keyword(kw):
+        return jsonify({"ok": True, "keyword": kw})
+    return jsonify({"ok": False, "error": "duplicate or invalid"}), 409
+
+
+@app.route("/api/keywords/<int:kw_id>", methods=["DELETE"])
+@require_admin_token
+def api_keywords_delete(kw_id):
+    """검색어 삭제 (기본 xlsx 25개는 삭제 불가)."""
+    import db
+    if db.delete_keyword(kw_id):
+        return jsonify({"ok": True})
+    return jsonify({"ok": False, "error": "cannot delete (default or not found)"}), 400
+
+
+# ---------- ② 게시판 링크 관리 ----------
+
+@app.route("/api/urls", methods=["GET"])
+def api_urls_list():
+    """크롤러 URL 조회 + 실패 알림 정보 병합."""
+    import db
+    cid = request.args.get("crawler_id")
+    active = request.args.get("active_only") == "1"
+    urls = db.get_crawler_urls(crawler_id=cid, active_only=active)
+
+    # 각 URL에 실패 정보 추가
+    failure_info = db.get_crawler_failure_info()
+    for u in urls:
+        info = failure_info.get(u['crawler_id'], {})
+        u['warn'] = info.get('warn', False)
+        u['last_error'] = info.get('last_error')
+        u['last_run_at'] = info.get('last_run_at')
+        u['hours_since_run'] = info.get('hours_since_run')
+        u['last_count'] = info.get('last_count')
+
+    return jsonify(urls)
+
+
+@app.route("/api/urls", methods=["POST"])
+@require_admin_token
+def api_urls_upsert():
+    """URL 추가/수정."""
+    import db
+    d = request.json or {}
+    crawler_id = d.get("crawler_id", "").strip()
+    board_key = d.get("board_key", "").strip() or "default"
+    url = d.get("url", "").strip()
+    if not (crawler_id and url):
+        return jsonify({"ok": False, "error": "crawler_id and url required"}), 400
+    db.upsert_crawler_url(
+        crawler_id=crawler_id,
+        crawler_name=d.get("crawler_name") or crawler_id,
+        board_key=board_key,
+        board_name=d.get("board_name") or "",
+        url=url,
+        fallback_url=d.get("fallback_url"),
+        is_active=int(d.get("is_active", 1)),
+        priority=int(d.get("priority", 0)),
+        notes=d.get("notes"),
+    )
+    return jsonify({"ok": True})
+
+
+@app.route("/api/urls/<int:url_id>", methods=["DELETE"])
+@require_admin_token
+def api_urls_delete(url_id):
+    """URL 삭제."""
+    import db
+    if db.delete_crawler_url(url_id):
+        return jsonify({"ok": True})
+    return jsonify({"ok": False, "error": "not found"}), 404
+
+
+# ---------- ③ 링크 검증 (잘못된 링크 감지) ----------
+
+@app.route("/api/urls/validate", methods=["POST"])
+@require_admin_token
+def api_urls_validate():
+    """URL 유효성 검증. 크롤러 세션(특수 헤더/TLS/쿠키) 재사용해 실제 크롤과 동일한 방식으로 검증.
+    개별 URL 또는 전체 크롤러."""
+    import db, threading
+    d = request.json or {}
+    crawler_id = d.get("crawler_id")
+
+    def do_check(target_urls):
+        for u_row in target_urls:
+            cid = u_row["crawler_id"]
+            # 크롤러 세션 재사용 (특수 헤더/어댑터/쿠키 포함)
+            session = None
+            if cid in CRAWLERS:
+                inst = CRAWLERS[cid].get("instance")
+                if inst is not None and hasattr(inst, "session"):
+                    session = inst.session
+            status, err = db.check_url_alive(u_row["url"], crawler_session=session)
+            db.record_link_status(
+                crawler_id=cid,
+                url=u_row["url"],
+                is_valid=(status == 200 and err is None),
+                http_status=status,
+                error_msg=err,
+            )
+
+    urls = db.get_crawler_urls(crawler_id=crawler_id, active_only=True)
+    if not urls:
+        return jsonify({"ok": False, "error": "no urls"}), 404
+    # 백그라운드 실행
+    threading.Thread(target=do_check, args=(urls,), daemon=True).start()
+    return jsonify({"ok": True, "queued": len(urls), "method": "crawler_session"})
+
+
+@app.route("/api/urls/status", methods=["GET"])
+def api_urls_status():
+    """URL 검증 결과 조회. invalid_only=1이면 실패한 것만."""
+    import db
+    cid = request.args.get("crawler_id")
+    invalid = request.args.get("invalid_only") == "1"
+    return jsonify(db.get_link_status(crawler_id=cid, invalid_only=invalid))
+
+
+# ---------- ④ 통합검색 폴백 ----------
+
+@app.route("/api/search_with_fallback/<crawler_id>", methods=["GET"])
+def api_search_with_fallback(crawler_id):
+    """지정 게시판 실패 시 폴백 URL 자동 사용."""
+    import db
+    if crawler_id not in CRAWLERS:
+        return jsonify({"error": "unknown crawler"}), 404
+    kw = request.args.get("keyword", "").strip()
+
+    # 1) DB 검색 우선 (빠름)
+    items = db.search(keyword=kw, crawler_ids=[crawler_id], limit=1000)
+    if items:
+        return jsonify({
+            "source": "db",
+            "crawler_id": crawler_id,
+            "count": len(items),
+            "items": items,
+        })
+
+    # 2) 실패 시 크롤러 URL 체크 → 폴백 확인
+    urls = db.get_crawler_urls(crawler_id=crawler_id, active_only=True)
+    for u in urls:
+        st = db.get_link_status(crawler_id=crawler_id)
+        # 이 URL의 상태
+        bad = [s for s in st if s["url"] == u["url"] and s["is_valid"] == 0]
+        if bad and u.get("fallback_url"):
+            # 폴백 URL 반환 (사용자가 클릭)
+            return jsonify({
+                "source": "fallback",
+                "crawler_id": crawler_id,
+                "fallback_url": u["fallback_url"],
+                "message": f"지정 URL 실패({bad[0]['error_msg']}) - 폴백 URL 제공",
+                "items": [],
+            })
+
+    return jsonify({
+        "source": "db_empty",
+        "crawler_id": crawler_id,
+        "count": 0,
+        "items": [],
+    })
+
+
+# ---------- ⑤ 결과 내 추가검색 (title 필터) ----------
+
+@app.route("/api/search_filter", methods=["POST"])
+def api_search_filter():
+    """이미 크롤한 DB 결과에서 title 다중 필터로 재검색.
+    body: { keywords: [...], crawler_ids: [...], mode: 'and'|'or' }
+    """
+    import db
+    d = request.json or {}
+    keywords = d.get("keywords") or []
+    crawler_ids = d.get("crawler_ids") or None
+    mode = d.get("mode", "or").lower()
+
+    if not keywords:
+        # 그냥 전체
+        items = db.search(crawler_ids=crawler_ids, limit=10000)
+    else:
+        # 여러 키워드 각각 조회 후 병합
+        all_items = {}
+        for kw in keywords:
+            for it in db.search(keyword=kw, crawler_ids=crawler_ids, limit=10000):
+                key = (it["crawler_id"], it["url"])
+                if mode == "or":
+                    all_items[key] = it
+                else:  # and: 모든 키워드가 title에 있어야
+                    all_items.setdefault(key, {"item": it, "hits": set()})
+                    if isinstance(all_items[key], dict) and "hits" in all_items[key]:
+                        all_items[key]["hits"].add(kw)
+
+        if mode == "and":
+            required = set(keywords)
+            items = [v["item"] for v in all_items.values()
+                     if isinstance(v, dict) and v.get("hits") == required]
+        else:
+            items = list(all_items.values())
+
+    return jsonify({
+        "keywords": keywords,
+        "mode": mode,
+        "count": len(items),
+        "items": items,
+    })
+
+
+# ============================================================================
+# 모듈 로드 시 항상 초기화 (gunicorn/uwsgi 등 프로덕션 WSGI 서버 호환)
+# 이전엔 if __name__ 안에만 있어서 gunicorn 실행 시 스케줄러 미동작 버그
+# ============================================================================
+_SCHEDULER_INITIALIZED = False
+
+
+def _init_app_on_load():
+    """모듈 import 시 1회 실행. gunicorn/flask run 모두에서 스케줄러 활성."""
+    global _SCHEDULER_INITIALIZED
+    if _SCHEDULER_INITIALIZED:
+        return
+    _SCHEDULER_INITIALIZED = True
+    try:
+        import db
+        db.init_db()
+        # 검증된 크롤러 URL seed (crawler_urls 비어있으면)
+        if not db.get_verified_crawler_ids():
+            try:
+                import seed_crawler_urls
+                seed_crawler_urls.seed()
+            except Exception as e:
+                print(f"[init] seed 실패: {e}")
+        # 알리오 쿠키 웜업 + 스케줄러 등록
+        try:
+            warmup_cookies()
+        except Exception as e:
+            print(f"[init] warmup 실패: {e}")
+        try:
+            setup_scheduler()
+        except Exception as e:
+            print(f"[init] scheduler 실패: {e}")
+        # 느린 크롤러 프리페치는 개발서버 무거워서 skip (원하면 활성화)
+        # prefetch_slow_crawlers()
+    except Exception as e:
+        print(f"[init] 초기화 오류: {e}")
+
+
+# 모듈 로드 즉시 실행 (gunicorn worker 프로세스 각각)
+_init_app_on_load()
+
+
+if __name__ == "__main__":
+    # 개발 서버 (직접 실행 시)
     app.run(debug=False, host="0.0.0.0", port=int(os.environ.get("PORT", 5001)),
             threaded=True, use_reloader=False)
